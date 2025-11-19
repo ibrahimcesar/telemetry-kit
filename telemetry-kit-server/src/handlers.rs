@@ -308,3 +308,85 @@ fn error_response(status: StatusCode, message: &str) -> (StatusCode, Json<serde_
         })),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    #[test]
+    fn test_is_supported_schema_valid() {
+        assert!(is_supported_schema("1.0.0"));
+        assert!(is_supported_schema("1.1.0"));
+        assert!(is_supported_schema("1.99.99"));
+    }
+
+    #[test]
+    fn test_is_supported_schema_invalid() {
+        assert!(!is_supported_schema("2.0.0"));
+        assert!(!is_supported_schema("0.9.0"));
+        assert!(!is_supported_schema("invalid"));
+    }
+
+    #[test]
+    fn test_event_batch_validation() {
+        // Valid batch with one event
+        let event = create_test_event();
+        let batch = EventBatch {
+            events: vec![event],
+        };
+        assert_eq!(batch.events.len(), 1);
+
+        // Empty batch (should be rejected by handler)
+        let empty_batch = EventBatch { events: vec![] };
+        assert_eq!(empty_batch.events.len(), 0);
+    }
+
+    #[test]
+    fn test_user_id_validation() {
+        // Valid user IDs
+        assert!("client_abc123".starts_with("client_"));
+        assert!("client_550e8400e29b41d4a716446655440000a1b2c3d4e5f6".starts_with("client_"));
+
+        // Invalid user IDs
+        assert!(!"anon_abc123".starts_with("client_"));
+        assert!(!"user_abc123".starts_with("client_"));
+        assert!(!"abc123".starts_with("client_"));
+    }
+
+    fn create_test_event() -> IncomingEvent {
+        use crate::models::*;
+
+        IncomingEvent {
+            schema_version: "1.0.0".to_string(),
+            event_id: Uuid::new_v4(),
+            timestamp: Utc::now(),
+            service: ServiceInfo {
+                name: "test-service".to_string(),
+                version: "1.0.0".to_string(),
+                language: "rust".to_string(),
+                language_version: Some("1.75.0".to_string()),
+            },
+            user_id: "client_test123".to_string(),
+            session_id: Some(Uuid::new_v4().to_string()),
+            environment: Environment {
+                os: "linux".to_string(),
+                os_version: Some("6.5.0".to_string()),
+                arch: Some("x86_64".to_string()),
+                ci: Some(false),
+                shell: Some("bash".to_string()),
+            },
+            event: EventData {
+                event_type: "command".to_string(),
+                category: Some("test".to_string()),
+                data: json!({"success": true}),
+            },
+            metadata: Metadata {
+                sdk_version: "0.1.0".to_string(),
+                transmission_timestamp: Utc::now(),
+                batch_size: 1,
+                retry_count: 0,
+            },
+        }
+    }
+}

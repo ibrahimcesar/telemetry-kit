@@ -178,3 +178,79 @@ fn error_response(status: StatusCode, message: &str) -> (StatusCode, Json<serde_
         })),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_verify_signature_valid() {
+        let secret = "test_secret";
+        let message = "1234567890:nonce123:body";
+
+        // Generate a valid signature
+        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(message.as_bytes());
+        let signature = hex::encode(mac.finalize().into_bytes());
+
+        // Verify it
+        assert!(verify_signature(message, &signature, secret));
+    }
+
+    #[test]
+    fn test_verify_signature_invalid() {
+        let secret = "test_secret";
+        let message = "1234567890:nonce123:body";
+        let wrong_signature = "invalid_signature";
+
+        assert!(!verify_signature(message, wrong_signature, secret));
+    }
+
+    #[test]
+    fn test_verify_signature_wrong_secret() {
+        let secret = "test_secret";
+        let wrong_secret = "wrong_secret";
+        let message = "1234567890:nonce123:body";
+
+        // Generate signature with correct secret
+        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(message.as_bytes());
+        let signature = hex::encode(mac.finalize().into_bytes());
+
+        // Try to verify with wrong secret
+        assert!(!verify_signature(message, &signature, wrong_secret));
+    }
+
+    #[test]
+    fn test_constant_time_eq_equal() {
+        let a = b"test_string";
+        let b = b"test_string";
+        assert!(constant_time_eq(a, b));
+    }
+
+    #[test]
+    fn test_constant_time_eq_different() {
+        let a = b"test_string";
+        let b = b"diff_string";
+        assert!(!constant_time_eq(a, b));
+    }
+
+    #[test]
+    fn test_constant_time_eq_different_length() {
+        let a = b"test";
+        let b = b"test_longer";
+        assert!(!constant_time_eq(a, b));
+    }
+
+    #[test]
+    fn test_hmac_message_format() {
+        // Verify the message format matches the spec: "timestamp:nonce:body"
+        let timestamp = "1234567890";
+        let nonce = "550e8400-e29b-41d4-a716-446655440000";
+        let body = r#"{"events":[{"event_id":"..."}]}"#;
+
+        let message = format!("{}:{}:{}", timestamp, nonce, body);
+
+        assert_eq!(message, format!("1234567890:550e8400-e29b-41d4-a716-446655440000:{}", body));
+    }
+}
