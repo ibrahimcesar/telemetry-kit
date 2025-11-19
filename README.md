@@ -2,7 +2,7 @@
   
 # 🔭 telemetry-kit
 
-_Privacy-first, batteries-included telemetry for Rust applications_
+_Privacy-first usage analytics for library authors_
 
 [![Crates.io](https://img.shields.io/crates/v/telemetry-kit.svg)](https://crates.io/crates/telemetry-kit)
 [![Documentation](https://docs.rs/telemetry-kit/badge.svg)](https://docs.rs/telemetry-kit)
