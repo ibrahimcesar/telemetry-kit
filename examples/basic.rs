@@ -1,4 +1,4 @@
-//! Basic example showing how telemetry-kit will work
+//! Basic example showing telemetry-kit usage
 //!
 //! Run with:
 //! ```
@@ -7,44 +7,39 @@
 
 use telemetry_kit::prelude::*;
 
-fn main() {
-    println!("telemetry-kit v{}", env!("CARGO_PKG_VERSION"));
-    println!();
-    println!("This is a placeholder example.");
-    println!("The actual implementation is under development.");
-    println!();
-    
-    // This is how it will work in v0.1.0+:
-    println!("Example of planned API:");
-    println!();
-    println!(r#"
-    use telemetry_kit::prelude::*;
+#[tokio::main]
+async fn main() -> Result<()> {
+    println!("=== Basic Telemetry Kit Example ===\n");
 
-    #[tokio::main]
-    async fn main() -> Result<(), Box<dyn std::error::Error>> {{
-        let _guard = telemetry_kit::init()
-            .service_name("my-app")
-            .endpoint("https://telemetry.myapp.com")
-            .anonymous()
-            .init()?;
-        
-        do_work().await?;
-        
-        Ok(())
-    }}
+    // Initialize telemetry
+    let telemetry = TelemetryKit::builder()
+        .service_name("basic-example")?
+        .service_version(env!("CARGO_PKG_VERSION"))
+        .build()?;
 
-    #[instrument]
-    async fn do_work() -> Result<(), Box<dyn std::error::Error>> {{
-        // Your code here - automatically instrumented!
-        Ok(())
-    }}
-    "#);
-    
-    // Current minimal implementation:
-    let _guard = telemetry_kit::init()
-        .service_name("basic-example")
-        .init();
-    
-    println!();
-    println!("✓ Basic initialization successful (placeholder)");
+    println!("✓ Telemetry initialized\n");
+
+    // Track a command
+    println!("Tracking command...");
+    telemetry
+        .track_command("greet", |event| {
+            event
+                .flag("--name")
+                .flag("--enthusiastic")
+                .success(true)
+                .duration_ms(42)
+        })
+        .await?;
+
+    println!("✓ Command tracked\n");
+
+    // View stats
+    let stats = telemetry.stats().await?;
+    println!("Stats:");
+    println!("  Total events: {}", stats.total_events);
+    println!("  Unsynced: {}", stats.unsynced_events);
+
+    println!("\n=== Example Complete ===");
+
+    Ok(())
 }
