@@ -12,6 +12,36 @@ _Privacy-first, batteries-included telemetry for Rust applications_
 
 </div>
 
+
+## 🎉 Currently Working (v0.0.1)
+
+The following features are **fully implemented and tested**:
+
+- ✅ **SQLite → Service Sync Protocol**: Offline-first event buffering with HMAC-SHA256 authentication
+- ✅ **Privacy-First User IDs**: Anonymous client identifiers with `client_` prefix (SHA-256 hashed machine IDs)
+- ✅ **Event Tracking**: Command and feature event builders with fluent API
+- ✅ **Ingestion Server**: Production-ready Rust server with PostgreSQL + Redis
+- ✅ **Rate Limiting**: Token-based rate limits (Free/Pro/Business/Enterprise tiers)
+- ✅ **Replay Protection**: Nonce-based duplicate request detection
+- ✅ **Batch Ingestion**: 1-1000 events per request with partial success handling
+- ✅ **Docker Deployment**: Complete docker-compose stack for local development
+
+### Quick Start with Working Features
+
+```bash
+# 1. Start the server
+cd server
+docker compose up -d
+
+# 2. Run the end-to-end test
+cd ..
+cargo run --example e2e_sync_test
+```
+
+See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for complete setup instructions.
+
+---
+
 ## 🎯 The Problem
 
 Current Rust telemetry solutions are:

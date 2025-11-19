@@ -75,7 +75,7 @@ required-features = ["cli"]
 [workspace]
 members = [
     ".",
-    "telemetry-kit-server",
+    "server",
     # Future workspace members:
     # "telemetry-kit-cli",
     # "telemetry-kit-macros",
