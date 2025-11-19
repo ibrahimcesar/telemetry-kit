@@ -35,7 +35,7 @@ Every event sent by any SDK follows this structure:
     "language_version": "1.75.0"
   },
   "user": {
-    "id": "anon_abc123def456",
+    "id": "client_abc123def456",
     "session_id": "sess_xyz789"
   },
   "environment": {
@@ -134,7 +134,7 @@ Anonymous user identification.
 ```json
 {
   "user": {
-    "id": "anon_abc123def456",
+    "id": "client_abc123def456",
     "session_id": "sess_xyz789"
   }
 }
@@ -144,7 +144,7 @@ Anonymous user identification.
 - **Type:** String
 - **Purpose:** Track unique users (anonymously)
 - **Format:** SHA-256 hash of machine ID + salt
-- **Example:** `"anon_" + first_12_chars_of_hash`
+- **Example:** `"client_" + first_12_chars_of_hash`
 - **Privacy:** NEVER send actual user IDs, emails, or names
 
 **Generation (Rust):**
@@ -152,7 +152,7 @@ Anonymous user identification.
 let machine_id = get_machine_id()?;
 let salt = "telemetry-kit-v1";
 let hash = sha256(format!("{}{}", machine_id, salt));
-let user_id = format!("anon_{}", &hash[..12]);
+let user_id = format!("client_{}", &hash[..12]);
 ```
 
 **Generation (JavaScript):**
@@ -160,7 +160,7 @@ let user_id = format!("anon_{}", &hash[..12]);
 const machineId = getMachineId();
 const salt = 'telemetry-kit-v1';
 const hash = sha256(`${machineId}${salt}`);
-const userId = `anon_${hash.substring(0, 12)}`;
+const userId = `client_${hash.substring(0, 12)}`;
 ```
 
 ### `user.session_id` (optional)
@@ -698,7 +698,7 @@ User-Agent: telemetry-kit-rust/0.1.0
 2. **Event ID:** Must be valid UUID v4
 3. **Timestamp:** Must be ISO 8601, within 7 days
 4. **Service Name:** Must match `^[a-z0-9-_]+$`
-5. **User ID:** Must start with `anon_`
+5. **User ID:** Must start with `client_`
 6. **Event Type:** Must be known type or `custom`
 7. **Max Size:** Event must be < 100KB
 
