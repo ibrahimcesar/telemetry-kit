@@ -25,14 +25,22 @@ Welcome to the telemetry-kit documentation! This directory contains strategic pl
    - Privacy-first design
    - Event structure and protocols
 
+### Technical Specifications
+
+4. **[EVENT_SCHEMA.md](./EVENT_SCHEMA.md)** ⭐ **CRITICAL**
+   - Universal event format for all SDKs
+   - JSON schema with multi-language support
+   - Event types, privacy rules, examples
+   - Rust, JavaScript, Python, Go compatible
+
 ### Research & Analysis
 
-4. **[MULTI_LANGUAGE_ROADMAP.md](./MULTI_LANGUAGE_ROADMAP.md)**
+5. **[MULTI_LANGUAGE_ROADMAP.md](./MULTI_LANGUAGE_ROADMAP.md)**
    - Strategy for expanding beyond Rust
    - JavaScript → Python → Go
    - Multi-language architecture
 
-5. **[JS_TS_ECOSYSTEM_ANALYSIS.md](./JS_TS_ECOSYSTEM_ANALYSIS.md)**
+6. **[JS_TS_ECOSYSTEM_ANALYSIS.md](./JS_TS_ECOSYSTEM_ANALYSIS.md)**
    - JavaScript/TypeScript market research
    - Pain points and opportunities
    - Technical implementation for JS
@@ -43,9 +51,10 @@ If you're new to the project, read these in order:
 
 1. **[EXECUTIVE_SUMMARY.md](./EXECUTIVE_SUMMARY.md)** - Understand the vision (10 min)
 2. **[TELEMETRY_APPROACH.md](./TELEMETRY_APPROACH.md)** - Understand the technical approach (15 min)
-3. **[DEVELOPMENT_ROADMAP.md](./DEVELOPMENT_ROADMAP.md)** - See what we're building (20 min)
+3. **[EVENT_SCHEMA.md](./EVENT_SCHEMA.md)** - Understand the data format (15 min)
+4. **[DEVELOPMENT_ROADMAP.md](./DEVELOPMENT_ROADMAP.md)** - See what we're building (20 min)
 
-Total: ~45 minutes to get up to speed
+Total: ~60 minutes to get up to speed
 
 ## 🔑 Key Decisions
 
