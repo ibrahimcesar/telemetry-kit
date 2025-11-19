@@ -58,7 +58,8 @@ Every event sent by any SDK follows this structure:
   },
   "metadata": {
     "sdk_version": "0.1.0",
-    "sent_at": "2025-01-19T15:45:05.123Z"
+    "sent_at": "2025-01-19T15:45:05.123Z",
+    "nounce": "765323"
   }
 }
 ```
