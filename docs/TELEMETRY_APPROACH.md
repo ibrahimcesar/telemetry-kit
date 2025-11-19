@@ -290,9 +290,32 @@ ORDER BY date DESC;
 ### Anonymous by Default
 - **User ID:** SHA-256 hash of machine ID + salt
 - **No PII:** Never collect emails, IPs, usernames
-- **Opt-in:** Require explicit consent on first run
+- **Author's Choice:** Opt-in, opt-out, or configurable
 
-### Consent Flow (CLI)
+### Consent Patterns (Author Chooses)
+
+**Pattern 1: Opt-in (Privacy-first)**
+```rust
+telemetry_kit::init()
+    .consent_mode(ConsentMode::OptIn)  // Show prompt first time
+    .init()?;
+```
+
+**Pattern 2: Opt-out (Like Next.js)**
+```rust
+telemetry_kit::init()
+    .consent_mode(ConsentMode::OptOut)  // Collect unless disabled
+    .init()?;
+```
+
+**Pattern 3: Silent (No prompt, just respect DO_NOT_TRACK)**
+```rust
+telemetry_kit::init()
+    .consent_mode(ConsentMode::Silent)  // Collect, respect DO_NOT_TRACK
+    .init()?;
+```
+
+### Example Opt-In Prompt (If Author Chooses)
 ```
 $ my-cli build
 
@@ -318,11 +341,52 @@ $ my-cli build
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### DO_NOT_TRACK Support
+### Example Opt-Out Pattern (Like Next.js)
 ```bash
-# Respect user preference
+# CLI provides disable command
+$ my-cli telemetry disable
+✓ Telemetry disabled. No data will be collected.
+
+# Or environment variable
+$ export MY_CLI_TELEMETRY=0
+$ my-cli build  # No telemetry sent
+```
+
+### DO_NOT_TRACK Support (Always Respected)
+```bash
+# Respect user preference - ALWAYS honored regardless of consent mode
 export DO_NOT_TRACK=1
-my-cli build  # No telemetry sent
+my-cli build  # No telemetry sent, even if opt-out mode
+```
+
+### Documentation Best Practices
+
+We **strongly recommend** library authors document telemetry in their README:
+
+```markdown
+## Telemetry
+
+my-cli collects anonymous usage data to help us understand which features
+are used and prioritize development. No personal information is collected.
+
+**What we collect:**
+- Commands executed (e.g., "build", "deploy")
+- Success/failure rates
+- Tool version and operating system
+
+**What we DON'T collect:**
+- File names, paths, or code
+- Personal information
+- Environment variables
+
+**Disable telemetry:**
+```bash
+my-cli telemetry disable
+# or
+export DO_NOT_TRACK=1
+```
+
+Learn more: [Telemetry Documentation](https://my-cli.com/telemetry)
 ```
 
 ## Comparison: OpenTelemetry vs Simple Events

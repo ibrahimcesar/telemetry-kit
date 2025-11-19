@@ -286,20 +286,24 @@ Simple JSON events, not OpenTelemetry traces:
    - All user IDs are SHA-256 hashes
    - No PII collected unless explicitly enabled
 
-2. **Opt-In Required**
-   - CLI tools show consent prompt on first run
-   - Libraries document telemetry in README
+2. **Author's Choice (We Recommend Patterns)**
+   - SDK supports: opt-in, opt-out, or silent
+   - Strong documentation on best practices
+   - Examples for each consent pattern
 
-3. **Transparent**
+3. **DO_NOT_TRACK (Always Respected)**
+   - Honor `DO_NOT_TRACK=1` environment variable
+   - Works regardless of consent mode chosen by author
+   - Universal, non-negotiable
+
+4. **Transparent**
    - Users can see exactly what data is sent
    - `--show-telemetry` flag to inspect events
-
-4. **Respect DO_NOT_TRACK**
-   - Honor `DO_NOT_TRACK=1` environment variable
-   - Disable entirely if set
+   - Clear documentation templates for authors
 
 5. **User Control**
-   - Easy opt-out: `my-cli telemetry disable`
+   - Easy disable: `my-cli telemetry disable`
+   - Environment variables: `MY_CLI_TELEMETRY=0`
    - Data deletion: library authors can purge user data
 
 ## 🤝 Open Source Strategy

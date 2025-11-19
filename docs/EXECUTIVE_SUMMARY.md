@@ -229,21 +229,36 @@ telemetry-kit helps developers answer questions like:
 
 ### Core Principles
 1. **Anonymous by default** - No PII collected
-2. **Opt-in consent** - Users must agree
+2. **Author's choice** - Opt-in, opt-out, or configurable (we recommend & document patterns)
 3. **Transparent** - Show exactly what's sent
-4. **Respect DO_NOT_TRACK** - Honor user preferences
+4. **Respect DO_NOT_TRACK** - Honor user preferences (universal)
 5. **Self-hostable** - No vendor lock-in
 
+### SDK Provides (Author's Choice)
+- **Consent flows:** Opt-in prompt, opt-out patterns, or silent
+- **Transparency tools:** `--show-telemetry` flag, data inspection
+- **Disable mechanisms:** `my-cli telemetry disable`, env vars
+- **DO_NOT_TRACK:** Always respected (built-in, not optional)
+
+### Documentation Guidance
+We **strongly recommend** and document:
+- ✅ Clear disclosure in README
+- ✅ Easy opt-out mechanism
+- ✅ Transparency about what's collected
+- ✅ Respect user preferences
+
+But the final choice is the **author's** based on their tool's context.
+
 ### Compliance
-- ✅ GDPR-compliant (anonymous, consent, right to deletion)
-- ✅ CCPA-compliant (opt-out mechanism)
+- ✅ GDPR-compliant (anonymous, right to deletion, opt-out)
+- ✅ CCPA-compliant (opt-out mechanism built-in)
 - ✅ HIPAA-friendly (no PHI collected)
 
-### Trust Building
-- Open source (MIT + Apache 2.0)
-- Public security audits
-- Clear privacy policy
-- Community governance
+### Examples in the Wild
+- **Next.js:** Opt-out by default (`next telemetry disable`)
+- **Homebrew:** Opt-out by default (`export HOMEBREW_NO_ANALYTICS=1`)
+- **VS Code:** Configurable in settings
+- **npm:** Opt-out (`npm config set disable-analytics true`)
 
 ## 📈 Go-to-Market Strategy
 

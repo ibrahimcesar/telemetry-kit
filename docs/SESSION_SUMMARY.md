@@ -251,9 +251,9 @@
 
 ### Core Principles
 1. **Anonymous by default** - SHA-256 hashed user IDs
-2. **Opt-in consent** - CLI prompt on first run
-3. **Transparent** - Users see what's sent
-4. **DO_NOT_TRACK** - Honor environment variable
+2. **Author's choice** - Opt-in, opt-out, or silent (SDK provides all patterns)
+3. **DO_NOT_TRACK** - Always honored, regardless of consent mode
+4. **Transparent** - Users see what's sent
 5. **Self-hostable** - Your data, your infrastructure
 
 ### Compliance
