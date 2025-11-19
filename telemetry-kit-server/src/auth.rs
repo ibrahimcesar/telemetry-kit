@@ -1,12 +1,12 @@
 //! HMAC authentication and verification
 
 use axum::{
-    async_trait,
-    extract::{FromRequestParts, Request},
-    http::{request::Parts, StatusCode},
+    body::Body,
+    extract::{Request, State},
+    http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
-    Json, RequestExt,
+    Json,
 };
 use chrono::Utc;
 use hmac::{Hmac, Mac};
@@ -19,115 +19,12 @@ use crate::AppState;
 
 type HmacSha256 = Hmac<Sha256>;
 
-/// Verified request with associated token
-#[derive(Debug, Clone)]
-pub struct VerifiedRequest {
-    pub token: ApiToken,
-    pub body: String,
-}
-
-#[async_trait]
-impl FromRequestParts<Arc<AppState>> for VerifiedRequest {
-    type Rejection = (StatusCode, Json<serde_json::Value>);
-
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &Arc<AppState>,
-    ) -> Result<Self, Self::Rejection> {
-        // Extract required headers
-        let signature = parts
-            .headers
-            .get("X-Signature")
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "Missing X-Signature header"))?;
-
-        let timestamp = parts
-            .headers
-            .get("X-Timestamp")
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "Missing X-Timestamp header"))?;
-
-        let nonce = parts
-            .headers
-            .get("X-Nonce")
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "Missing X-Nonce header"))?;
-
-        // Validate timestamp (within ±10 minutes)
-        let request_time = timestamp.parse::<i64>().map_err(|_| {
-            error_response(StatusCode::BAD_REQUEST, "Invalid timestamp format")
-        })?;
-
-        let now = Utc::now().timestamp();
-        let time_diff = (now - request_time).abs();
-
-        if time_diff > 600 {
-            // 10 minutes
-            return Err(error_response(
-                StatusCode::FORBIDDEN,
-                "Timestamp outside acceptable window",
-            ));
-        }
-
-        // Check nonce for replay attacks
-        let nonce_key = format!("nonce:{}", nonce);
-        let nonce_exists: bool = state
-            .redis
-            .get(&nonce_key)
-            .await
-            .map_err(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR, "Redis error"))?
-            .unwrap_or(false);
-
-        if nonce_exists {
-            return Err(error_response(
-                StatusCode::CONFLICT,
-                "Duplicate nonce detected",
-            ));
-        }
-
-        // Store nonce with 10-minute TTL
-        state
-            .redis
-            .set_ex(&nonce_key, true, 600)
-            .await
-            .map_err(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR, "Redis error"))?;
-
-        // Extract token from Authorization header or path
-        let auth_header = parts
-            .headers
-            .get("Authorization")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.strip_prefix("Bearer "));
-
-        let token_str = auth_header.ok_or_else(|| {
-            error_response(StatusCode::UNAUTHORIZED, "Missing or invalid Authorization header")
-        })?;
-
-        // Fetch token from database
-        let token = sqlx::query_as::<_, ApiToken>(
-            "SELECT * FROM api_tokens WHERE token = $1 AND is_active = true",
-        )
-        .bind(token_str)
-        .fetch_optional(&state.db)
-        .await
-        .map_err(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR, "Database error"))?
-        .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "Invalid token"))?;
-
-        // We need the body to verify the signature, but we can't consume it here
-        // The body will be passed separately in the middleware
-        Ok(VerifiedRequest {
-            token,
-            body: String::new(), // Will be filled by middleware
-        })
-    }
-}
-
 /// HMAC verification middleware
 pub async fn verify_hmac(
-    state: Arc<AppState>,
-    mut request: Request,
+    State(state): State<Arc<AppState>>,
+    request: Request,
     next: Next,
-) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Response, impl IntoResponse> {
     // Extract headers
     let signature = request
         .headers()
@@ -151,16 +48,17 @@ pub async fn verify_hmac(
         .to_string();
 
     // Extract body
-    let body_bytes = axum::body::to_bytes(request.body_mut(), usize::MAX)
+    let (parts, body) = request.into_parts();
+    let body_bytes = axum::body::to_bytes(body, usize::MAX)
         .await
         .map_err(|_| error_response(StatusCode::BAD_REQUEST, "Failed to read body"))?;
 
-    let body = String::from_utf8(body_bytes.to_vec())
+    let body_str = String::from_utf8(body_bytes.to_vec())
         .map_err(|_| error_response(StatusCode::BAD_REQUEST, "Invalid UTF-8 in body"))?;
 
     // Get token from Authorization header
-    let auth_header = request
-        .headers()
+    let auth_header = parts
+        .headers
         .get("Authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "));
@@ -180,7 +78,7 @@ pub async fn verify_hmac(
     .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "Invalid token"))?;
 
     // Verify HMAC signature
-    let message = format!("{}:{}:{}", timestamp, nonce, body);
+    let message = format!("{}:{}:{}", timestamp, nonce, body_str);
     let is_valid = verify_signature(&message, &signature, &token.secret);
 
     if !is_valid {
@@ -235,9 +133,10 @@ pub async fn verify_hmac(
         .await
         .ok();
 
-    // Store token and body in request extensions for use by handlers
+    // Reconstruct request with body and add extensions
+    let mut request = Request::from_parts(parts, Body::from(body_bytes));
     request.extensions_mut().insert(token);
-    request.extensions_mut().insert(body);
+    request.extensions_mut().insert(body_str);
 
     Ok(next.run(request).await)
 }

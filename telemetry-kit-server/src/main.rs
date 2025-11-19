@@ -44,7 +44,10 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tracing::info!("Starting telemetry-kit-server v{}", env!("CARGO_PKG_VERSION"));
+    tracing::info!(
+        "Starting telemetry-kit-server v{}",
+        env!("CARGO_PKG_VERSION")
+    );
 
     // Connect to database
     tracing::info!("Connecting to database...");
@@ -68,23 +71,24 @@ async fn main() -> anyhow::Result<()> {
         config: config.clone(),
     });
 
-    // Build router
+    // Build router with state
     let app = Router::new()
         // Health check
         .route("/health", get(handlers::health))
-        // Ingestion endpoint
+        // Ingestion endpoint with middleware
         .route(
             "/v1/ingest/:org_id/:app_id",
             post(handlers::ingest)
-                .layer(middleware::from_fn_with_state(
-                    state.clone(),
-                    auth::verify_hmac,
-                ))
-                .layer(middleware::from_fn_with_state(
+                .route_layer(middleware::from_fn_with_state(
                     state.clone(),
                     rate_limit::rate_limit,
+                ))
+                .route_layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    auth::verify_hmac,
                 )),
         )
+        .with_state(state)
         // Add CORS
         .layer(
             CorsLayer::new()
@@ -93,8 +97,7 @@ async fn main() -> anyhow::Result<()> {
                 .allow_headers(Any),
         )
         // Add tracing
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+        .layer(TraceLayer::new_for_http());
 
     // Start server
     let addr = config.server.address();

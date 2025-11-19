@@ -60,7 +60,7 @@ pub async fn health() -> Json<serde_json::Value> {
 pub async fn ingest(
     State(state): State<Arc<AppState>>,
     Path(params): Path<IngestPath>,
-    mut request: Request,
+    request: Request,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
     // Get token from extensions (set by auth middleware)
     let token = request

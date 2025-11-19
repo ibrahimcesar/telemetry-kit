@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 /// API token with associated secret
 #[derive(Debug, Clone, FromRow)]
+#[allow(dead_code)]
 pub struct ApiToken {
     pub id: Uuid,
     pub org_id: Uuid,
@@ -31,6 +32,7 @@ pub enum TokenTier {
 
 /// Stored telemetry event
 #[derive(Debug, Clone, FromRow)]
+#[allow(dead_code)]
 pub struct StoredEvent {
     pub id: i64,
     pub event_id: Uuid,

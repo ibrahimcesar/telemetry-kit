@@ -28,7 +28,7 @@ impl RedisClient {
     /// Set a value in Redis with expiry
     pub async fn set_ex<T>(&self, key: &str, value: T, seconds: u64) -> Result<(), RedisError>
     where
-        T: redis::ToRedisArgs,
+        T: redis::ToRedisArgs + Send + Sync,
     {
         let mut conn = self.conn.clone();
         conn.set_ex(key, value, seconds).await
@@ -55,6 +55,7 @@ impl RedisClient {
     }
 
     /// Get current count for rate limiting
+    #[allow(dead_code)]
     pub async fn get_count(&self, key: &str) -> Result<i64, RedisError> {
         let mut conn = self.conn.clone();
         let count: Option<i64> = conn.get(key).await?;
