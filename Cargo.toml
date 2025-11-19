@@ -1,0 +1,46 @@
+[package]
+name = "telemetry-kit"
+version = "0.0.1"
+edition = "2021"
+authors = ["Ibrahim Cesar <email@ibrahimcesar.com>"]
+license = "MIT OR Apache-2.0"
+description = "Privacy-first, batteries-included telemetry toolkit for Rust applications with OpenTelemetry"
+repository = "https://github.com/ibrahimcesar/telemetry-kit"
+homepage = "https://github.com/ibrahimcesar/telemetry-kit"
+documentation = "https://docs.rs/telemetry-kit"
+readme = "README.md"
+keywords = ["telemetry", "opentelemetry", "observability", "tracing", "metrics"]
+categories = ["development-tools", "development-tools::profiling", "network-programming"]
+rust-version = "1.75.0"
+
+[dependencies]
+# Core will be added as we develop
+
+[dev-dependencies]
+# Test dependencies will be added as needed
+
+[features]
+default = []
+# Future features:
+# cli = []
+# auto-instrument = []
+# privacy = []
+# simple-server = []
+
+[lib]
+name = "telemetry_kit"
+path = "src/lib.rs"
+
+[[bin]]
+name = "telemetry-kit"
+path = "src/bin/cli.rs"
+required-features = ["cli"]
+
+[workspace]
+members = [
+    ".",
+    # Future workspace members:
+    # "telemetry-kit-cli",
+    # "telemetry-kit-server",
+    # "telemetry-kit-macros",
+]
