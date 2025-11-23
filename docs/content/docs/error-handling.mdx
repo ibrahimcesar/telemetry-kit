@@ -1,0 +1,451 @@
+---
+title: Error Handling
+description: Understanding and handling errors in telemetry-kit
+---
+
+## Overview
+
+Telemetry-kit provides clear, actionable error messages that help you quickly identify and fix issues. All errors include:
+
+- **Clear description** of what went wrong
+- **Common causes** of the error
+- **Actionable suggestions** for fixing the problem
+- **Context** about where to find more information
+
+## Error Types
+
+### Configuration Errors
+
+Configuration errors occur when the SDK is not properly configured.
+
+#### Invalid Service Name
+
+```rust
+let result = TelemetryKit::builder()
+    .service_name("MyApp") // ❌ Contains uppercase
+    .build();
+
+// Error: Invalid configuration: service_name: 'MyApp' contains invalid characters.
+//        Use only lowercase letters, numbers, dashes, and underscores
+//        (e.g., 'my-app', 'cli_tool')
+```
+
+**Fix:** Use only lowercase letters, numbers, dashes, and underscores:
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app") // ✅ Valid
+    .build()?;
+```
+
+#### Invalid UUID
+
+```rust
+let config = SyncConfig::builder()
+    .org_id("my-org") // ❌ Not a valid UUID
+    .build();
+
+// Error: Invalid configuration: org_id 'my-org' is not a valid UUID.
+//        Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+**Fix:** Use a valid UUID:
+```rust
+let config = SyncConfig::builder()
+    .org_id("550e8400-e29b-41d4-a716-446655440000") // ✅ Valid UUID
+    .build()?;
+```
+
+#### Missing Required Fields
+
+```rust
+let result = TelemetryKit::builder()
+    .build(); // ❌ No service_name provided
+
+// Error: Invalid configuration: Missing required field: service_name
+```
+
+**Fix:** Provide all required fields:
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")? // ✅ Required field provided
+    .build()?;
+```
+
+### Network Errors
+
+Network errors occur when the SDK cannot communicate with the server.
+
+#### Connection Failed
+
+```rust
+// Error: HTTP request failed: connection refused
+//
+// Suggestion: Check network connectivity and verify the endpoint URL
+```
+
+**Common causes:**
+- Server is down or unreachable
+- Network connectivity issues
+- Invalid endpoint URL
+- Firewall blocking requests
+
+**Fix:**
+1. Check your internet connection
+2. Verify the server is running
+3. Test with curl: `curl -I https://telemetry-kit.dev`
+4. Check firewall rules
+
+#### DNS Resolution Failed
+
+```rust
+// Error: HTTP request failed: failed to lookup address information
+//
+// Suggestion: Check network connectivity and verify the endpoint URL
+```
+
+**Fix:**
+1. Check DNS configuration
+2. Verify the endpoint URL is correct
+3. Test DNS: `nslookup telemetry-kit.dev`
+
+### Authentication Errors
+
+Authentication errors occur when credentials are invalid or expired.
+
+```rust
+// Error: Authentication failed: Invalid signature
+//
+// Suggestion: Verify your token and secret are correct
+```
+
+**Common causes:**
+- Invalid token or secret
+- Expired token
+- Token doesn't have required permissions
+- HMAC signature mismatch
+
+**Fix:**
+1. Verify credentials in your dashboard
+2. Generate a new token if expired
+3. Ensure secret matches the token
+4. Check token permissions
+
+### Rate Limiting Errors
+
+Rate limiting errors occur when you exceed the allowed request rate.
+
+```rust
+// Error: Rate limit exceeded. Retry after 60 seconds.
+//
+// Suggestion: Batch events together or upgrade your plan
+```
+
+**Fix:**
+1. Wait the specified duration before retrying
+2. Batch events together:
+   ```rust
+   // Instead of tracking events individually
+   for i in 0..100 {
+       telemetry.track_command(&format!("cmd_{}", i), |e| {
+           e.success(true)
+       }).await?;
+   }
+
+   // Batch them and sync once
+   telemetry.sync().await?;
+   ```
+3. Reduce event frequency
+4. Consider upgrading your plan
+
+### Server Errors
+
+Server errors occur when the server encounters an issue processing your request.
+
+#### 400 Bad Request
+
+```rust
+// Error: Server error (400): Invalid request body
+//
+// Suggestion: Check request parameters and ensure they're valid
+```
+
+**Fix:** Verify request parameters match the expected schema
+
+#### 401 Unauthorized
+
+```rust
+// Error: Server error (401): Invalid credentials
+//
+// Suggestion: Verify your authentication token and secret
+```
+
+**Fix:** Check your token and secret are correct
+
+#### 403 Forbidden
+
+```rust
+// Error: Server error (403): Permission denied
+//
+// Suggestion: Your token doesn't have permission for this operation
+```
+
+**Fix:** Ensure your token has the required permissions
+
+#### 404 Not Found
+
+```rust
+// Error: Server error (404): Endpoint not found
+//
+// Suggestion: Check the endpoint URL - resource not found
+```
+
+**Fix:** Verify the endpoint URL is correct
+
+#### 413 Payload Too Large
+
+```rust
+// Error: Server error (413): Request entity too large
+//
+// Suggestion: Request payload too large - reduce batch size
+```
+
+**Fix:** Reduce batch size:
+```rust
+let config = SyncConfig::builder()
+    .org_id(org_id)?
+    .app_id(app_id)?
+    .token(token)
+    .secret(secret)
+    .batch_size(50) // Reduce from default 100
+    .build()?;
+```
+
+#### 429 Too Many Requests
+
+```rust
+// Error: Server error (429): Rate limit exceeded
+//
+// Suggestion: Rate limited - wait before retrying or upgrade plan
+```
+
+**Fix:** See [Rate Limiting Errors](#rate-limiting-errors)
+
+#### 5xx Server Errors
+
+```rust
+// Error: Server error (500): Internal server error
+//
+// Suggestion: Server error - retry with exponential backoff
+```
+
+**Fix:** The SDK automatically retries with exponential backoff. If the error persists, check the [status page](https://status.telemetry-kit.dev).
+
+### Database Errors
+
+Database errors occur when there are issues with local event storage.
+
+```rust
+// Error: Database error: unable to open database file
+//
+// Suggestion: Check file permissions and ensure the database isn't locked by another process
+```
+
+**Common causes:**
+- Database file is locked by another process
+- Insufficient permissions to write
+- Disk full or quota exceeded
+- Corrupted database file
+
+**Fix:**
+1. Check file permissions: `ls -la ~/.telemetry-kit/`
+2. Ensure no other process is using the database
+3. Check disk space: `df -h`
+4. Try deleting the database file (events will be lost):
+   ```bash
+   rm ~/.telemetry-kit/my-app.db
+   ```
+
+### Retry Errors
+
+Retry errors occur when an operation fails after multiple attempts.
+
+```rust
+// Error: Maximum retries exceeded
+//
+// Suggestion: Check server health and network connectivity, or enable offline mode
+```
+
+**Fix:**
+1. Check server health at [status.telemetry-kit.dev](https://status.telemetry-kit.dev)
+2. Verify network connectivity
+3. Enable offline mode (events will be queued):
+   ```rust
+   let telemetry = TelemetryKit::builder()
+       .service_name("my-app")?
+       .auto_sync(false) // Disable auto-sync
+       .build()?;
+   ```
+
+## Best Practices
+
+### 1. Handle Errors Gracefully
+
+Don't panic on telemetry errors - they shouldn't crash your application:
+
+```rust
+// ❌ Bad: Panic on error
+telemetry.track_command("build", |e| e.success(true)).await.unwrap();
+
+// ✅ Good: Log and continue
+if let Err(e) = telemetry.track_command("build", |e| e.success(true)).await {
+    eprintln!("Failed to track event: {}", e);
+}
+
+// ✅ Better: Use the ? operator in functions that return Result
+async fn run() -> Result<()> {
+    telemetry.track_command("build", |e| e.success(true)).await?;
+    Ok(())
+}
+```
+
+### 2. Enable Debug Logging
+
+Set the `RUST_LOG` environment variable to see detailed error information:
+
+```bash
+RUST_LOG=telemetry_kit=debug cargo run
+```
+
+### 3. Check Configuration Early
+
+Validate configuration at startup, not at runtime:
+
+```rust
+// ✅ Good: Fail fast at startup
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .with_sync_credentials(org_id, app_id, token, secret)?
+    .build()?;
+
+// Now all tracking calls will succeed (or fail gracefully)
+telemetry.track_command("test", |e| e.success(true)).await?;
+```
+
+### 4. Implement Retry Logic
+
+For critical events, implement your own retry logic:
+
+```rust
+use tokio::time::{sleep, Duration};
+
+async fn track_with_retry(telemetry: &TelemetryKit) -> Result<()> {
+    let mut attempts = 0;
+    let max_attempts = 3;
+
+    loop {
+        match telemetry.sync().await {
+            Ok(_) => return Ok(()),
+            Err(e) if e.is_retryable() && attempts < max_attempts => {
+                attempts += 1;
+                let delay = Duration::from_secs(2_u64.pow(attempts));
+                eprintln!("Sync failed, retrying in {:?}: {}", delay, e);
+                sleep(delay).await;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+```
+
+### 5. Monitor Error Rates
+
+Track error rates to detect issues early:
+
+```rust
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static ERROR_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+if let Err(e) = telemetry.track_command("build", |e| e.success(true)).await {
+    ERROR_COUNT.fetch_add(1, Ordering::Relaxed);
+    eprintln!("Telemetry error: {}", e);
+}
+```
+
+## Error Reference
+
+### TelemetryError Enum
+
+```rust
+pub enum TelemetryError {
+    /// SQLite database error
+    Database(rusqlite::Error),
+
+    /// HTTP request error
+    Http(reqwest::Error),
+
+    /// JSON serialization error
+    Json(serde_json::Error),
+
+    /// Invalid configuration
+    InvalidConfig(String),
+
+    /// Authentication error
+    Auth(String),
+
+    /// Rate limit exceeded
+    RateLimitExceeded { retry_after: u64 },
+
+    /// Server error with status code
+    ServerError { status: u16, message: String },
+
+    /// Maximum retries exceeded
+    MaxRetriesExceeded,
+
+    /// Invalid event schema
+    InvalidSchema(String),
+
+    /// IO error
+    Io(std::io::Error),
+
+    /// Machine ID error
+    MachineId(String),
+
+    /// Generic error
+    Other(String),
+}
+```
+
+### Helper Methods
+
+```rust
+impl TelemetryError {
+    /// Check if the error is retryable
+    pub fn is_retryable(&self) -> bool;
+
+    /// Create a configuration error
+    pub fn invalid_config(field: &str, reason: &str) -> Self;
+
+    /// Create a UUID validation error
+    pub fn invalid_uuid(field: &str, value: &str) -> Self;
+
+    /// Create a missing field error
+    pub fn missing_field(field: &str) -> Self;
+}
+```
+
+## Getting Help
+
+If you encounter an error that isn't covered in this guide:
+
+1. **Check the logs**: Enable debug logging with `RUST_LOG=telemetry_kit=debug`
+2. **Search GitHub Issues**: [github.com/ibrahimcesar/telemetry-kit/issues](https://github.com/ibrahimcesar/telemetry-kit/issues)
+3. **Ask in Discussions**: [github.com/ibrahimcesar/telemetry-kit/discussions](https://github.com/ibrahimcesar/telemetry-kit/discussions)
+4. **Report a bug**: [github.com/ibrahimcesar/telemetry-kit/issues/new](https://github.com/ibrahimcesar/telemetry-kit/issues/new)
+
+## See Also
+
+- [Configuration Guide](/docs/api)
+- [Privacy Controls](/docs/privacy)
+- [Auto-Sync](/docs/auto-sync)
+- [Self-Hosting](/docs/self-hosting)

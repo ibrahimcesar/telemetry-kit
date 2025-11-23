@@ -11,6 +11,11 @@ pub struct EventStorage {
     conn: Connection,
 }
 
+// SAFETY: EventStorage is always used behind Arc<RwLock<>> which ensures
+// only one thread accesses the Connection at a time
+unsafe impl Send for EventStorage {}
+unsafe impl Sync for EventStorage {}
+
 impl EventStorage {
     /// Create a new event storage
     ///
@@ -100,16 +105,9 @@ impl EventStorage {
         let synced_at = Utc::now().timestamp();
 
         // Convert UUIDs to strings first so they own the data
-        let event_id_strings: Vec<String> = event_ids
-            .iter()
-            .map(|id| id.to_string())
-            .collect();
+        let event_id_strings: Vec<String> = event_ids.iter().map(|id| id.to_string()).collect();
 
-        let placeholders = event_ids
-            .iter()
-            .map(|_| "?")
-            .collect::<Vec<_>>()
-            .join(",");
+        let placeholders = event_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
         let query = format!(
             "UPDATE events SET synced_at = ?1 WHERE event_id IN ({})",
@@ -128,16 +126,9 @@ impl EventStorage {
     /// Increment retry count for events
     pub fn increment_retry(&self, event_ids: &[uuid::Uuid]) -> Result<()> {
         // Convert UUIDs to strings first so they own the data
-        let event_id_strings: Vec<String> = event_ids
-            .iter()
-            .map(|id| id.to_string())
-            .collect();
+        let event_id_strings: Vec<String> = event_ids.iter().map(|id| id.to_string()).collect();
 
-        let placeholders = event_ids
-            .iter()
-            .map(|_| "?")
-            .collect::<Vec<_>>()
-            .join(",");
+        let placeholders = event_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
 
         let query = format!(
             "UPDATE events SET retry_count = retry_count + 1 WHERE event_id IN ({})",

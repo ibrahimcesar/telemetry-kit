@@ -1,0 +1,474 @@
+---
+title: CLI Tool
+description: Manage telemetry configuration and operations from the command line
+icon: Terminal
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+## Overview
+
+The `telemetry-kit` CLI provides convenient commands for managing telemetry configuration and operations without writing code.
+
+## Installation
+
+<Tabs items={['cargo install', 'From source']}>
+  <Tab value="cargo install">
+    ```bash
+    cargo install telemetry-kit --features cli
+    ```
+  </Tab>
+  <Tab value="From source">
+    ```bash
+    git clone https://github.com/ibrahimcesar/telemetry-kit
+    cd telemetry-kit
+    cargo build --release --features cli
+    # Binary at: target/release/telemetry-kit
+    ```
+  </Tab>
+</Tabs>
+
+## Commands
+
+### `init` - Interactive Setup
+
+Initialize telemetry configuration for your project.
+
+```bash
+telemetry-kit init
+```
+
+**Options:**
+- `-y, --yes` - Skip prompts and use defaults
+- `-n, --service-name <NAME>` - Specify service name
+- `-s, --service <NAME>` - Override service globally
+
+**Example:**
+
+```bash
+$ telemetry-kit init
+
+🔭 Telemetry Kit - Interactive Setup
+
+Service name: my-app
+
+Configure sync to telemetry-kit.dev? yes
+
+Sync Configuration
+
+Organization ID: acme-corp
+Application ID: my-app
+Auth Token: tk_abc123...
+HMAC Secret: ********
+
+Testing credentials...
+✓ Credentials validated successfully!
+```
+
+The command will output code you can copy-paste into your application.
+
+### `test` - Validate Credentials
+
+Test sync credentials and verify connectivity.
+
+```bash
+telemetry-kit test
+```
+
+**Options:**
+- `-o, --org-id <ID>` - Organization ID
+- `-a, --app-id <ID>` - Application ID
+- `-t, --token <TOKEN>` - Authentication token
+- `-s, --secret <SECRET>` - HMAC secret
+
+**Examples:**
+
+<Tabs items={['Interactive', 'With flags', 'Environment variables']}>
+  <Tab value="Interactive">
+    ```bash
+    telemetry-kit test
+    # Prompts for all credentials
+    ```
+  </Tab>
+  <Tab value="With flags">
+    ```bash
+    telemetry-kit test \
+      --org-id demo-org \
+      --app-id demo-app \
+      --token demo-token \
+      --secret demo-secret
+    ```
+  </Tab>
+  <Tab value="Environment variables">
+    ```bash
+    export TELEMETRY_ORG_ID="my-org"
+    export TELEMETRY_APP_ID="my-app"
+    export TELEMETRY_TOKEN="tk_..."
+    export TELEMETRY_SECRET="secret_..."
+
+    telemetry-kit test \
+      --org-id "$TELEMETRY_ORG_ID" \
+      --app-id "$TELEMETRY_APP_ID" \
+      --token "$TELEMETRY_TOKEN" \
+      --secret "$TELEMETRY_SECRET"
+    ```
+  </Tab>
+</Tabs>
+
+### `stats` - View Statistics
+
+View event statistics for a service.
+
+```bash
+telemetry-kit stats
+```
+
+**Options:**
+- `-d, --detailed` - Show detailed breakdown including file size
+- `-s, --service <NAME>` - Service name (defaults to current directory)
+
+**Example output:**
+
+```
+📊 Event Statistics
+
+Service: my-app
+Database: /Users/you/.telemetry-kit/my-app.db
+
+Events:
+  Total:      42
+  Synced:     30
+  Unsynced:   12
+
+Sync rate: 71%
+
+💡 You have 12 unsynced events
+   Run telemetry-kit sync to sync now
+```
+
+### `sync` - Manual Synchronization
+
+Manually trigger event synchronization.
+
+```bash
+telemetry-kit sync
+```
+
+**Options:**
+- `-f, --force` - Force sync even if auto-sync is enabled
+- `-s, --service <NAME>` - Service name
+
+<Callout type="warn">
+Currently a placeholder. Full implementation requires stored credential management.
+</Callout>
+
+### `validate` - Validate Configuration
+
+Validate telemetry configuration for a service.
+
+```bash
+telemetry-kit validate
+```
+
+**Options:**
+- `-c, --config <PATH>` - Path to configuration file (future use)
+- `-s, --service <NAME>` - Service name
+
+**Example:**
+
+```
+✓ Validating Configuration
+
+Service: my-app
+✓ Database found: /Users/you/.telemetry-kit/my-app.db
+✓ Telemetry initialization successful
+
+✓ Configuration valid
+```
+
+### `clean` - Clear Events
+
+Clear local event database for a service.
+
+```bash
+telemetry-kit clean
+```
+
+**Options:**
+- `-y, --yes` - Skip confirmation prompt
+- `--all` - Also remove configuration files (future use)
+- `-s, --service <NAME>` - Service name
+
+<Callout type="error">
+This operation is destructive. Unsynced events will be permanently lost.
+</Callout>
+
+**Example:**
+
+```bash
+$ telemetry-kit clean
+
+🧹 Clean Local Events
+
+Service: my-app
+Current: 42 events (12 unsynced)
+
+⚠️  You have 12 unsynced events that will be lost!
+
+Are you sure you want to delete all local events? no
+
+Cancelled
+```
+
+## Global Options
+
+Available on all commands:
+
+- `-s, --service <NAME>` - Service name to operate on
+- `-h, --help` - Show command help
+- `-V, --version` - Show version information
+
+## Workflows
+
+### Typical Developer Workflow
+
+<Steps>
+<Step>
+
+### Initialize telemetry
+
+```bash
+cd my-app
+telemetry-kit init
+```
+
+</Step>
+
+<Step>
+
+### Add code to your application
+
+Copy the generated code snippet into your `main.rs`.
+
+</Step>
+
+<Step>
+
+### Run your application
+
+```bash
+cargo run
+```
+
+</Step>
+
+<Step>
+
+### View statistics
+
+```bash
+telemetry-kit stats
+```
+
+</Step>
+
+<Step>
+
+### View detailed stats
+
+```bash
+telemetry-kit stats --detailed
+```
+
+</Step>
+
+<Step>
+
+### Validate configuration
+
+```bash
+telemetry-kit validate
+```
+
+</Step>
+
+<Step>
+
+### Clean up (optional)
+
+```bash
+telemetry-kit clean
+```
+
+</Step>
+</Steps>
+
+### Managing Multiple Services
+
+```bash
+# View stats for different services
+telemetry-kit stats --service frontend
+telemetry-kit stats --service backend
+telemetry-kit stats --service worker
+
+# Validate all services
+for service in frontend backend worker; do
+  echo "Validating $service..."
+  telemetry-kit validate --service "$service"
+done
+
+# Clean specific service
+telemetry-kit clean --service old-service --yes
+```
+
+## User Experience
+
+### Colored Output
+
+The CLI uses colors to improve readability:
+
+- **Cyan** - Command names, values, highlights
+- **Green** - Success messages, valid states
+- **Yellow** - Warnings, info messages
+- **Red** - Errors, failures
+- **Dimmed** - Less important information
+- **Bold** - Headers, important messages
+
+Disable colors with the `NO_COLOR=1` environment variable.
+
+### Interactive Prompts
+
+- **Input** - Text input with defaults
+- **Password** - Hidden input for secrets
+- **Confirm** - Yes/no questions
+- **Progress** - Spinners for long operations
+
+### Helpful Hints
+
+The CLI provides contextual hints and next steps:
+
+```
+✓ Initialization complete!
+
+Next steps:
+  • telemetry-kit stats - View statistics
+  • telemetry-kit test - Test sync
+  • telemetry-kit validate - Validate config
+```
+
+## Database Location
+
+Event databases are stored in:
+
+```
+~/.telemetry-kit/<service-name>.db
+```
+
+Each service has its own SQLite database file.
+
+## Troubleshooting
+
+### "No telemetry data found"
+
+```bash
+# Make sure you've initialized telemetry in your app
+telemetry-kit init
+
+# Check the database path
+ls ~/.telemetry-kit/
+```
+
+### "Failed to initialize"
+
+```bash
+# Validate your configuration
+telemetry-kit validate
+
+# Check for database corruption
+rm ~/.telemetry-kit/my-app.db
+# Re-run your app
+```
+
+### "Credentials test failed"
+
+```bash
+# Double-check your credentials
+telemetry-kit test
+
+# Verify network connectivity
+ping telemetry-kit.dev
+```
+
+## Examples
+
+### Quick Setup Script
+
+```bash
+#!/bin/bash
+set -e
+
+# Initialize telemetry with defaults
+telemetry-kit init --yes --service-name my-app
+
+# Validate setup
+telemetry-kit validate
+
+echo "✓ Telemetry setup complete!"
+```
+
+### CI/CD Integration
+
+```yaml
+# .github/workflows/telemetry.yml
+name: Telemetry Stats
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install CLI
+        run: cargo install telemetry-kit --features cli
+
+      - name: View stats
+        run: telemetry-kit stats --service my-app
+```
+
+### Monitoring Script
+
+```bash
+#!/bin/bash
+# monitor-telemetry.sh
+
+while true; do
+  clear
+  telemetry-kit stats --detailed
+  sleep 10
+done
+```
+
+## Future Enhancements
+
+Planned features for future releases:
+
+- **Configuration files** - Store credentials securely in config files
+- **Full sync implementation** - CLI-based sync with stored credentials
+- **Event filtering** - View and filter specific events
+- **Export/Import** - Backup and restore event data
+- **Batch operations** - Operate on multiple services at once
+- **Plugin system** - Extend CLI with custom commands
+
+## See Also
+
+- [Getting Started](/docs) - Initial setup guide
+- [Auto-Sync](/docs/auto-sync) - Background synchronization
+- [API Reference](/docs/api) - Complete API documentation
+- [GitHub](https://github.com/ibrahimcesar/telemetry-kit) - Source code and issues

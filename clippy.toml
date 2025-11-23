@@ -1,0 +1,33 @@
+# Clippy linter configuration
+# https://doc.rust-lang.org/clippy/
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 30
+
+# Type complexity threshold
+type-complexity-threshold = 250
+
+# Single character binding names threshold
+single-char-binding-names-threshold = 4
+
+# Array size threshold for large arrays
+array-size-threshold = 512000
+
+# Vec box size threshold
+vec-box-size-threshold = 4096
+
+# Max suggested slice pattern size
+max-suggested-slice-pattern-length = 3
+
+# Allow certain TODOs/FIXMEs
+#todo-comment = false
+
+# Disallow print statements in production code
+# Uncomment in CI: disallowed-methods = ["std::print", "std::println", "std::eprint", "std::eprintln"]
+
+# Enforce documentation
+# Uncomment to require: missing-docs-in-private-items = true
+
+# Strict mode (uncomment for maximum lints)
+# nursery = true
+# pedantic = true

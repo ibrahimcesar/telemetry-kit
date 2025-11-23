@@ -156,23 +156,23 @@ fn test_timestamp_validation() {
 
 #[test]
 fn test_invalid_user_id_formats() {
-    let valid_ids = vec![
-        "client_abc123",
-        "client_550e8400e29b41d4a716446655440000",
-    ];
+    let valid_ids = vec!["client_abc123", "client_550e8400e29b41d4a716446655440000"];
 
-    let invalid_ids = vec![
-        "anon_abc123",
-        "user_abc123",
-        "abc123",
-        "",
-    ];
+    let invalid_ids = vec!["anon_abc123", "user_abc123", "abc123", ""];
 
     for id in valid_ids {
-        assert!(id.starts_with("client_"), "Valid ID should start with client_: {}", id);
+        assert!(
+            id.starts_with("client_"),
+            "Valid ID should start with client_: {}",
+            id
+        );
     }
 
     for id in invalid_ids {
-        assert!(!id.starts_with("client_"), "Invalid ID should not start with client_: {}", id);
+        assert!(
+            !id.starts_with("client_"),
+            "Invalid ID should not start with client_: {}",
+            id
+        );
     }
 }

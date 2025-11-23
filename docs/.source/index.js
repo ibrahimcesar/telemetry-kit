@@ -1,0 +1,10 @@
+import { toRuntime } from "fumadocs-mdx"
+import * as file_0 from "../content/docs/meta.json?collection=meta&hash=5623c6a5c5dbd2a99696b8bdd7c01f76afda80de866a7df62fa05a73c05c0e58"
+import * as file_1 from "../content/docs/api.mdx?collection=docs&hash=5623c6a5c5dbd2a99696b8bdd7c01f76afda80de866a7df62fa05a73c05c0e58"
+import * as file_2 from "../content/docs/auto-sync.mdx?collection=docs&hash=5623c6a5c5dbd2a99696b8bdd7c01f76afda80de866a7df62fa05a73c05c0e58"
+import * as file_3 from "../content/docs/cli.mdx?collection=docs&hash=5623c6a5c5dbd2a99696b8bdd7c01f76afda80de866a7df62fa05a73c05c0e58"
+import * as file_4 from "../content/docs/examples.mdx?collection=docs&hash=5623c6a5c5dbd2a99696b8bdd7c01f76afda80de866a7df62fa05a73c05c0e58"
+import * as file_5 from "../content/docs/index.mdx?collection=docs&hash=5623c6a5c5dbd2a99696b8bdd7c01f76afda80de866a7df62fa05a73c05c0e58"
+import * as file_6 from "../content/docs/self-hosting.mdx?collection=docs&hash=5623c6a5c5dbd2a99696b8bdd7c01f76afda80de866a7df62fa05a73c05c0e58"
+export const meta = [toRuntime("meta", file_0, {"path":"meta.json","absolutePath":"/Users/ibrahimcesar/Dev/telemetry-kit/docs/content/docs/meta.json"})]
+export const docs = [toRuntime("doc", file_1, {"path":"api.mdx","absolutePath":"/Users/ibrahimcesar/Dev/telemetry-kit/docs/content/docs/api.mdx"}),toRuntime("doc", file_2, {"path":"auto-sync.mdx","absolutePath":"/Users/ibrahimcesar/Dev/telemetry-kit/docs/content/docs/auto-sync.mdx"}),toRuntime("doc", file_3, {"path":"cli.mdx","absolutePath":"/Users/ibrahimcesar/Dev/telemetry-kit/docs/content/docs/cli.mdx"}),toRuntime("doc", file_4, {"path":"examples.mdx","absolutePath":"/Users/ibrahimcesar/Dev/telemetry-kit/docs/content/docs/examples.mdx"}),toRuntime("doc", file_5, {"path":"index.mdx","absolutePath":"/Users/ibrahimcesar/Dev/telemetry-kit/docs/content/docs/index.mdx"}),toRuntime("doc", file_6, {"path":"self-hosting.mdx","absolutePath":"/Users/ibrahimcesar/Dev/telemetry-kit/docs/content/docs/self-hosting.mdx"})]

@@ -56,10 +56,7 @@ async fn main() -> telemetry_kit::Result<()> {
 
     // Track various events
     telemetry
-        .track_command("init", |e| {
-            e.success(true)
-                .subcommand("e2e-test")
-        })
+        .track_command("init", |e| e.success(true).subcommand("e2e-test"))
         .await?;
     println!("   ✓ Tracked 'init' command");
 
@@ -73,10 +70,7 @@ async fn main() -> telemetry_kit::Result<()> {
     println!("   ✓ Tracked 'sync' feature");
 
     telemetry
-        .track_command("test", |e| {
-            e.success(true)
-                .duration_ms(150)
-        })
+        .track_command("test", |e| e.success(true).duration_ms(150))
         .await?;
     println!("   ✓ Tracked 'test' command\n");
 

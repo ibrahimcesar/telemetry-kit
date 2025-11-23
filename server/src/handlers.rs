@@ -214,21 +214,25 @@ async fn process_event(
     }
 
     // Check for duplicate event_id
-    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM events WHERE event_id = $1)")
-        .bind(event.event_id)
-        .fetch_one(&state.db)
-        .await
-        .map_err(|e| {
-            (
-                "database_error".to_string(),
-                format!("Database error: {}", e),
-            )
-        })?;
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM events WHERE event_id = $1)")
+            .bind(event.event_id)
+            .fetch_one(&state.db)
+            .await
+            .map_err(|e| {
+                (
+                    "database_error".to_string(),
+                    format!("Database error: {}", e),
+                )
+            })?;
 
     if exists {
         return Err((
             "duplicate".to_string(),
-            format!("Event already ingested (duplicate event_id: {})", event.event_id),
+            format!(
+                "Event already ingested (duplicate event_id: {})",
+                event.event_id
+            ),
         ));
     }
 

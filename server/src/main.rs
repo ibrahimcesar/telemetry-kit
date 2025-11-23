@@ -14,19 +14,16 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod auth;
+mod clacks;
 mod config;
 mod handlers;
 mod models;
-mod rate_limit;
-mod redis_client;
 
 use config::Config;
-use redis_client::RedisClient;
 
 /// Application state
 pub struct AppState {
     db: sqlx::PgPool,
-    redis: RedisClient,
     config: Config,
 }
 
@@ -60,14 +57,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Running database migrations...");
     run_migrations(&db).await?;
 
-    // Connect to Redis
-    tracing::info!("Connecting to Redis...");
-    let redis = RedisClient::new(&config.redis.url).await?;
-
     // Create application state
     let state = Arc::new(AppState {
         db,
-        redis,
         config: config.clone(),
     });
 
@@ -81,10 +73,6 @@ async fn main() -> anyhow::Result<()> {
             post(handlers::ingest)
                 .route_layer(middleware::from_fn_with_state(
                     state.clone(),
-                    rate_limit::rate_limit,
-                ))
-                .route_layer(middleware::from_fn_with_state(
-                    state.clone(),
                     auth::verify_hmac,
                 )),
         )
@@ -96,6 +84,8 @@ async fn main() -> anyhow::Result<()> {
                 .allow_methods(Any)
                 .allow_headers(Any),
         )
+        // Add GNU Terry Pratchett header (http://www.gnuterrypratchett.com/)
+        .layer(middleware::from_fn(clacks::add_clacks_header))
         // Add tracing
         .layer(TraceLayer::new_for_http());
 

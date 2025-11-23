@@ -54,28 +54,36 @@ impl SyncConfig {
 
     /// Get the full ingestion URL
     pub fn ingestion_url(&self) -> String {
-        format!("{}/v1/ingest/{}/{}", self.endpoint, self.org_id, self.app_id)
+        format!(
+            "{}/v1/ingest/{}/{}",
+            self.endpoint, self.org_id, self.app_id
+        )
     }
 
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
         if self.token.is_empty() {
-            return Err(TelemetryError::InvalidConfig(
-                "Token cannot be empty".to_string(),
+            return Err(TelemetryError::invalid_config(
+                "token",
+                "Token cannot be empty. Generate one at telemetry-kit.dev/settings/tokens",
             ));
         }
 
         if self.secret.is_empty() {
-            return Err(TelemetryError::InvalidConfig(
-                "Secret cannot be empty".to_string(),
+            return Err(TelemetryError::invalid_config(
+                "secret",
+                "Secret cannot be empty. Copy it from telemetry-kit.dev/settings/tokens",
             ));
         }
 
         if self.batch_size == 0 || self.batch_size > MAX_BATCH_SIZE {
-            return Err(TelemetryError::InvalidConfig(format!(
-                "Batch size must be between 1 and {}",
-                MAX_BATCH_SIZE
-            )));
+            return Err(TelemetryError::invalid_config(
+                "batch_size",
+                &format!(
+                    "Must be between 1 and {} (got {})",
+                    MAX_BATCH_SIZE, self.batch_size
+                ),
+            ));
         }
 
         Ok(())
@@ -117,9 +125,8 @@ impl SyncConfigBuilder {
     /// Set organization ID
     pub fn org_id(mut self, org_id: impl Into<String>) -> Result<Self> {
         let org_id_str = org_id.into();
-        let uuid = Uuid::parse_str(&org_id_str).map_err(|e| {
-            TelemetryError::InvalidConfig(format!("Invalid org_id UUID: {}", e))
-        })?;
+        let uuid = Uuid::parse_str(&org_id_str)
+            .map_err(|_| TelemetryError::invalid_uuid("org_id", &org_id_str))?;
         self.org_id = Some(uuid);
         Ok(self)
     }
@@ -133,9 +140,8 @@ impl SyncConfigBuilder {
     /// Set application ID
     pub fn app_id(mut self, app_id: impl Into<String>) -> Result<Self> {
         let app_id_str = app_id.into();
-        let uuid = Uuid::parse_str(&app_id_str).map_err(|e| {
-            TelemetryError::InvalidConfig(format!("Invalid app_id UUID: {}", e))
-        })?;
+        let uuid = Uuid::parse_str(&app_id_str)
+            .map_err(|_| TelemetryError::invalid_uuid("app_id", &app_id_str))?;
         self.app_id = Some(uuid);
         Ok(self)
     }
@@ -185,19 +191,21 @@ impl SyncConfigBuilder {
     /// Build the configuration
     pub fn build(self) -> Result<SyncConfig> {
         let config = SyncConfig {
-            endpoint: self.endpoint.unwrap_or_else(|| DEFAULT_ENDPOINT.to_string()),
+            endpoint: self
+                .endpoint
+                .unwrap_or_else(|| DEFAULT_ENDPOINT.to_string()),
             org_id: self
                 .org_id
-                .ok_or_else(|| TelemetryError::InvalidConfig("org_id is required".to_string()))?,
+                .ok_or_else(|| TelemetryError::missing_field("org_id"))?,
             app_id: self
                 .app_id
-                .ok_or_else(|| TelemetryError::InvalidConfig("app_id is required".to_string()))?,
+                .ok_or_else(|| TelemetryError::missing_field("app_id"))?,
             token: self
                 .token
-                .ok_or_else(|| TelemetryError::InvalidConfig("token is required".to_string()))?,
+                .ok_or_else(|| TelemetryError::missing_field("token"))?,
             secret: self
                 .secret
-                .ok_or_else(|| TelemetryError::InvalidConfig("secret is required".to_string()))?,
+                .ok_or_else(|| TelemetryError::missing_field("secret"))?,
             batch_size: self.batch_size.unwrap_or(DEFAULT_BATCH_SIZE),
             max_retries: self.max_retries.unwrap_or(5),
             sync_interval_secs: self.sync_interval_secs.unwrap_or(3600), // 1 hour default

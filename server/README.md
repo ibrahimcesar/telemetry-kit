@@ -1,12 +1,20 @@
 # Telemetry Kit Server
 
-Ingestion server for telemetry-kit events with HMAC authentication, rate limiting, and PostgreSQL storage.
+Reference implementation of a self-hosted ingestion server for telemetry-kit events with HMAC authentication and PostgreSQL storage.
+
+> **Note:** This server is provided as a **reference implementation** and **starting point** for self-hosting. For production use, we recommend our **managed service** with a **free tier** that provides **5-minute integration** with zero infrastructure management.
+>
+> - ✨ **Free Tier:** 10,000 events/month
+> - 🚀 **5-Minute Setup:** No server configuration required
+> - 📊 **Built-in Analytics:** Dashboard and insights included
+> - 🔒 **Fully Managed:** Updates, security, and scaling handled for you
+>
+> [Get Started with Managed Service →](https://telemetry-kit.dev)
 
 ## Features
 
 - ✅ HMAC-SHA256 request signing verification
-- ✅ Nonce-based replay attack prevention (Redis)
-- ✅ Per-token rate limiting with tier support
+- ✅ Timestamp-based request validation (±10 minutes)
 - ✅ PostgreSQL event storage with efficient indexes
 - ✅ Batch ingestion (1-1000 events)
 - ✅ Partial success handling (207 Multi-Status)
@@ -14,12 +22,13 @@ Ingestion server for telemetry-kit events with HMAC authentication, rate limitin
 - ✅ Comprehensive error responses
 - ✅ Health check endpoint
 
+
 ## Quick Start
 
 ### Using Docker Compose (Recommended)
 
 ```bash
-# Start all services (PostgreSQL, Redis, Server)
+# Start all services (PostgreSQL, Server)
 docker-compose up -d
 
 # View logs
@@ -37,7 +46,6 @@ The server will be available at `http://localhost:3000`.
 
 ```bash
 # Install PostgreSQL 16+
-# Install Redis 7+
 
 # Or use Docker:
 docker run -d --name postgres -p 5432:5432 \
@@ -45,8 +53,6 @@ docker run -d --name postgres -p 5432:5432 \
   -e POSTGRES_PASSWORD=telemetry \
   -e POSTGRES_DB=telemetry_kit \
   postgres:16-alpine
-
-docker run -d --name redis -p 6379:6379 redis:7-alpine
 ```
 
 2. **Configure Environment**
@@ -75,14 +81,6 @@ TK__SERVER__LOG_LEVEL=info
 # Database
 TK__DATABASE__URL=postgresql://user:pass@localhost:5432/telemetry_kit
 TK__DATABASE__MAX_CONNECTIONS=10
-
-# Redis
-TK__REDIS__URL=redis://localhost:6379
-
-# Rate Limits
-TK__RATE_LIMIT__FREE_RPM=10
-TK__RATE_LIMIT__PRO_RPM=100
-TK__RATE_LIMIT__BUSINESS_RPM=1000
 ```
 
 ## API Endpoints
@@ -101,6 +99,11 @@ Response:
 }
 ```
 
+Headers:
+```
+X-Clacks-Overhead: GNU Terry Pratchett
+```
+
 ### Ingest Events
 
 ```bash
@@ -112,10 +115,9 @@ Headers:
 - `Content-Type: application/json`
 - `X-Signature: <hmac_signature>`
 - `X-Timestamp: <unix_timestamp>`
-- `X-Nonce: <uuid>`
-- `X-Batch-Size: <count>`
-- `X-SDK-Version: <sdk_name/version>`
-- `X-Schema-Version: <schema_version>`
+- `X-Batch-Size: <count>` (optional)
+- `X-SDK-Version: <sdk_name/version>` (optional)
+- `X-Schema-Version: <schema_version>` (optional)
 
 Body:
 ```json
@@ -129,9 +131,7 @@ Responses:
 - `207 Multi-Status` - Partial success
 - `400 Bad Request` - Invalid request
 - `401 Unauthorized` - Invalid HMAC
-- `403 Forbidden` - Timestamp/token mismatch
-- `409 Conflict` - Duplicate nonce
-- `429 Too Many Requests` - Rate limit exceeded
+- `403 Forbidden` - Timestamp outside acceptable window
 
 ## Testing with Client SDK
 
@@ -200,30 +200,56 @@ CREATE TABLE events (
 );
 ```
 
-## Rate Limiting
+## Architecture
 
-Rate limits are enforced per token per minute:
+```mermaid
+graph TB
+    subgraph "Your Application"
+        SDK[telemetry-kit SDK]
+    end
 
-| Tier | Requests/Minute | Events/Month |
-|------|-----------------|--------------|
-| Free | 10 | 10,000 |
-| Pro | 100 | 100,000 |
-| Business | 1,000 | 1,000,000 |
-| Enterprise | Unlimited | Unlimited |
+    subgraph "Server (Self-Hosted)"
+        API[Axum API Server]
+        DB[(PostgreSQL)]
+    end
 
-Rate limit headers in responses:
+    SDK -->|HMAC-SHA256 + HTTPS| API
+    API -->|Store Events| DB
+
+    style SDK fill:#4A90E2
+    style API fill:#7ED321
+    style DB fill:#F5A623
 ```
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 87
-X-RateLimit-Reset: 1732003260
-```
+
+**Request Flow:**
+1. SDK creates events locally
+2. SDK buffers events in SQLite
+3. SDK sends batches with HMAC signature
+4. Server validates HMAC + timestamp
+5. Server stores events in PostgreSQL
 
 ## Security
 
 - **HMAC-SHA256** signatures prevent request tampering
-- **Nonce caching** prevents replay attacks (10-minute window)
 - **Timestamp validation** (±10 minutes tolerance)
 - **Constant-time comparison** prevents timing attacks
+- **Bearer token authentication** validates API access
+
+## GNU Terry Pratchett
+
+> "A man is not dead while his name is still spoken."
+> — Going Postal, Terry Pratchett
+
+All responses from this server include the `X-Clacks-Overhead: GNU Terry Pratchett` header as a tribute to Sir Terry Pratchett.
+
+In his Discworld novel "Going Postal," the clacks system (a semaphore network) had a special code "GNU":
+- **G**: send the message on
+- **N**: do not log the message
+- **U**: turn the message around at the end of the line
+
+This code kept the names of deceased clacks operators alive in the network forever. We carry on this tradition on the internet.
+
+Learn more: [http://www.gnuterrypratchett.com/](http://www.gnuterrypratchett.com/)
 
 ## Development
 

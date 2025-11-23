@@ -1,0 +1,406 @@
+---
+title: API Reference
+description: Complete API reference for telemetry-kit
+icon: Code
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+This page provides a complete reference for the telemetry-kit API.
+
+## TelemetryKit
+
+The main entry point for telemetry operations.
+
+### Builder Pattern
+
+```rust
+use telemetry_kit::prelude::*;
+
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .service_version("1.0.0")
+    .build()?;
+```
+
+### Builder Methods
+
+#### `service_name(name: impl Into<String>) -> Result<Self>`
+
+Set the service name (required). Must contain only lowercase alphanumeric characters, dashes, and underscores.
+
+```rust
+.service_name("my-app")?
+```
+
+#### `service_version(version: impl Into<String>) -> Self`
+
+Set the service version (optional, defaults to `CARGO_PKG_VERSION`).
+
+```rust
+.service_version("1.0.0")
+```
+
+#### `db_path(path: impl Into<PathBuf>) -> Self`
+
+Set custom database path for event storage.
+
+```rust
+.db_path("/custom/path/telemetry.db")
+```
+
+**Default:** `~/.telemetry-kit/<service-name>.db`
+
+### Sync Configuration
+
+#### `with_sync_credentials(...) -> Result<Self>`
+
+Configure sync with telemetry-kit.dev using credentials.
+
+```rust
+.with_sync_credentials(
+    org_id: impl Into<String>,
+    app_id: impl Into<String>,
+    token: impl Into<String>,
+    secret: impl Into<String>
+)?
+```
+
+#### `sync(config: SyncConfig) -> Self`
+
+Configure sync with a custom `SyncConfig`.
+
+```rust
+use telemetry_kit::sync::SyncConfig;
+
+let config = SyncConfig::builder()
+    .org_id("my-org")?
+    .app_id("my-app")?
+    .token("token")
+    .secret("secret")
+    .endpoint("https://custom.endpoint.com/ingest")
+    .build()?;
+
+.sync(config)
+```
+
+### Auto-Sync Configuration
+
+#### `auto_sync(enabled: bool) -> Self`
+
+Enable or disable automatic background syncing (default: enabled when sync is configured).
+
+```rust
+.auto_sync(true)
+```
+
+#### `sync_interval(seconds: u64) -> Self`
+
+Set the auto-sync interval in seconds (default: 60).
+
+```rust
+.sync_interval(30)
+```
+
+#### `sync_on_shutdown(enabled: bool) -> Self`
+
+Configure whether to sync on shutdown (default: true).
+
+```rust
+.sync_on_shutdown(true)
+```
+
+### Event Tracking
+
+#### `track_command<F>(...) -> Result<()>`
+
+Track a command execution.
+
+```rust
+telemetry.track_command("build", |event| {
+    event
+        .flag("--release")
+        .duration_ms(1234)
+        .success(true)
+}).await?;
+```
+
+**Parameters:**
+- `command: impl Into<String>` - Command name
+- `builder_fn: F` - Closure to configure the event
+
+#### `track_feature<F>(...) -> Result<()>`
+
+Track a feature usage.
+
+```rust
+telemetry.track_feature("authentication", |event| {
+    event
+        .method("oauth")
+        .success(true)
+}).await?;
+```
+
+**Parameters:**
+- `feature: impl Into<String>` - Feature name
+- `builder_fn: F` - Closure to configure the event
+
+#### `track_custom(...) -> Result<()>`
+
+Track a custom event.
+
+```rust
+telemetry.track_custom(
+    "user_action",
+    serde_json::json!({
+        "action": "click",
+        "element": "button"
+    })
+).await?;
+```
+
+**Parameters:**
+- `event_type: impl Into<String>` - Event type
+- `data: serde_json::Value` - Event data
+
+### Statistics and Sync
+
+#### `stats() -> Result<EventStats>`
+
+Get statistics about buffered events.
+
+```rust
+let stats = telemetry.stats().await?;
+println!("Total: {}", stats.total_events);
+println!("Synced: {}", stats.synced_events);
+println!("Unsynced: {}", stats.unsynced_events);
+```
+
+#### `sync() -> Result<()>`
+
+Manually trigger a sync (requires sync configuration).
+
+```rust
+telemetry.sync().await?;
+```
+
+#### `cleanup() -> Result<usize>`
+
+Clean up old synced events (older than 7 days).
+
+```rust
+let removed = telemetry.cleanup().await?;
+println!("Removed {} old events", removed);
+```
+
+#### `shutdown() -> Result<()>`
+
+Gracefully shutdown auto-sync task with optional final sync.
+
+```rust
+telemetry.shutdown().await?;
+```
+
+## Event Builders
+
+### CommandEventBuilder
+
+Builder for command execution events.
+
+```rust
+CommandEventBuilder::new("build")
+    .flag("--release")
+    .flag("--target")
+    .arg("value")
+    .success(true)
+    .duration_ms(1234)
+    .exit_code(0)
+    .build()
+```
+
+**Methods:**
+- `flag(flag: impl Into<String>) -> Self` - Add a flag
+- `arg(arg: impl Into<String>) -> Self` - Add an argument
+- `success(success: bool) -> Self` - Set success status
+- `duration_ms(ms: u64) -> Self` - Set duration in milliseconds
+- `exit_code(code: i32) -> Self` - Set exit code
+
+### FeatureEventBuilder
+
+Builder for feature usage events.
+
+```rust
+FeatureEventBuilder::new("authentication")
+    .method("oauth")
+    .success(true)
+    .metadata(key, value)
+    .build()
+```
+
+**Methods:**
+- `method(method: impl Into<String>) -> Self` - Set method/variant
+- `success(success: bool) -> Self` - Set success status
+- `metadata(key: impl Into<String>, value: impl Into<String>) -> Self` - Add metadata
+
+## Types
+
+### EventStats
+
+Statistics about buffered events.
+
+```rust
+pub struct EventStats {
+    pub total_events: usize,
+    pub unsynced_events: usize,
+    pub synced_events: usize,
+}
+```
+
+### SyncConfig
+
+Configuration for sync protocol.
+
+```rust
+use telemetry_kit::sync::SyncConfig;
+
+let config = SyncConfig::builder()
+    .org_id("my-org")?
+    .app_id("my-app")?
+    .token("token")
+    .secret("secret")
+    .endpoint("https://custom.endpoint.com/ingest")  // Optional
+    .batch_size(200)  // Optional, default: 100
+    .build()?;
+```
+
+**Fields:**
+- `org_id` - Organization ID (required)
+- `app_id` - Application ID (required)
+- `token` - Authentication token (required)
+- `secret` - HMAC secret key (required)
+- `endpoint` - Custom endpoint URL (optional)
+- `batch_size` - Events per batch (optional, default: 100)
+
+### AutoSyncConfig
+
+Configuration for auto-sync behavior.
+
+```rust
+use telemetry_kit::auto_sync::AutoSyncConfig;
+
+let config = AutoSyncConfig {
+    interval: 60,              // Sync every 60 seconds
+    sync_on_shutdown: true,    // Sync before dropping
+    batch_size: 100,           // Max events per sync
+};
+```
+
+## Error Handling
+
+### TelemetryError
+
+Main error type for telemetry operations.
+
+```rust
+use telemetry_kit::TelemetryError;
+
+match result {
+    Ok(()) => println!("Success!"),
+    Err(TelemetryError::InvalidConfig(msg)) => {
+        eprintln!("Config error: {}", msg);
+    }
+    Err(TelemetryError::Storage(msg)) => {
+        eprintln!("Storage error: {}", msg);
+    }
+    Err(TelemetryError::Sync(msg)) => {
+        eprintln!("Sync error: {}", msg);
+    }
+    Err(e) => eprintln!("Error: {}", e),
+}
+```
+
+**Variants:**
+- `InvalidConfig(String)` - Invalid configuration
+- `Storage(String)` - Storage/database error
+- `Sync(String)` - Synchronization error
+- `Network(String)` - Network error
+- `Serialization(String)` - Serialization error
+
+## Feature Flags
+
+### `sync`
+
+Enables synchronization features (enabled by default).
+
+```toml
+[dependencies]
+telemetry-kit = { version = "0.2", default-features = false }
+```
+
+### `cli`
+
+Enables CLI tool compilation.
+
+```toml
+[dependencies]
+telemetry-kit = { version = "0.2", features = ["cli"] }
+```
+
+## Examples
+
+### Complete Example
+
+```rust
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Initialize with all features
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .service_version(env!("CARGO_PKG_VERSION"))
+        .with_sync_credentials(
+            std::env::var("TELEMETRY_ORG_ID")?,
+            std::env::var("TELEMETRY_APP_ID")?,
+            std::env::var("TELEMETRY_TOKEN")?,
+            std::env::var("TELEMETRY_SECRET")?,
+        )?
+        .auto_sync(true)
+        .sync_interval(60)
+        .sync_on_shutdown(true)
+        .build()?;
+
+    // Track various events
+    telemetry.track_command("build", |event| {
+        event
+            .flag("--release")
+            .success(true)
+            .duration_ms(1234)
+    }).await?;
+
+    telemetry.track_feature("optimization", |event| {
+        event.method("lto").success(true)
+    }).await?;
+
+    // View stats
+    let stats = telemetry.stats().await?;
+    println!("Events: {} ({}unsynced)",
+        stats.total_events,
+        stats.unsynced_events
+    );
+
+    // Graceful shutdown
+    telemetry.shutdown().await?;
+
+    Ok(())
+}
+```
+
+## See Also
+
+- [Getting Started](/docs) - Initial setup
+- [Auto-Sync](/docs/auto-sync) - Background synchronization
+- [CLI Tool](/docs/cli) - Command-line interface
+- [Examples](https://github.com/ibrahimcesar/telemetry-kit/tree/main/examples) - Working code examples

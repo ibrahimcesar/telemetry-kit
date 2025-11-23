@@ -1,0 +1,141 @@
+---
+title: Getting Started
+description: Get started with telemetry-kit - privacy-first telemetry for Rust applications
+icon: Rocket
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+## Welcome to telemetry-kit
+
+**telemetry-kit** is a privacy-first, batteries-included telemetry toolkit for Rust applications. It makes adding telemetry to your Rust applications effortless with zero boilerplate and sensible defaults.
+
+### Key Features
+
+- 🚀 **Auto-Sync** - Background synchronization with configurable intervals
+- 🔒 **Privacy-First** - Anonymous user IDs, GDPR compliant, DO_NOT_TRACK support
+- 🛠️ **CLI Tool** - Manage telemetry from the command line
+- 📦 **Self-Hostable** - Production-ready server included
+- ⚡ **Zero-Config** - Sensible defaults, minimal boilerplate
+- 🔄 **Offline-Capable** - SQLite buffering with automatic sync
+
+## Installation
+
+<Steps>
+<Step>
+
+### Add telemetry-kit to your project
+
+<Tabs items={['Cargo.toml', 'cargo add']}>
+  <Tab value="Cargo.toml">
+    ```toml
+    [dependencies]
+    telemetry-kit = "0.2.0-alpha.1"
+    ```
+  </Tab>
+  <Tab value="cargo add">
+    ```bash
+    cargo add telemetry-kit
+    ```
+  </Tab>
+</Tabs>
+
+</Step>
+
+<Step>
+
+### Initialize telemetry in your application
+
+```rust
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Initialize with just service name
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .service_version(env!("CARGO_PKG_VERSION"))
+        .build()?;
+
+    // Your application code here
+
+    Ok(())
+}
+```
+
+</Step>
+
+<Step>
+
+### Track events
+
+```rust
+// Track a command execution
+telemetry.track_command("build", |event| {
+    event
+        .flag("--release")
+        .duration_ms(1234)
+        .success(true)
+}).await?;
+
+// Track a feature usage
+telemetry.track_feature("authentication", |event| {
+    event
+        .method("oauth")
+        .success(true)
+}).await?;
+```
+
+</Step>
+</Steps>
+
+## What's Next?
+
+### Learn More
+
+- **[Configure Auto-Sync](/docs/auto-sync)** - Learn how to enable automatic background synchronization
+- **[CLI Tool](/docs/cli)** - Manage telemetry from the command line
+- **[API Reference](/docs/api)** - Explore the complete API documentation
+- **[Self-Hosting](/docs/self-hosting)** - Deploy your own telemetry server
+- **[Examples](/docs/examples)** - Real-world code examples
+
+## Quick Example
+
+Here's a complete example showing local-only telemetry:
+
+```rust
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Initialize telemetry (local-only)
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .build()?;
+
+    // Track events
+    telemetry.track_command("process", |event| {
+        event
+            .flag("--input")
+            .flag("--output")
+            .success(true)
+            .duration_ms(500)
+    }).await?;
+
+    // View stats
+    let stats = telemetry.stats().await?;
+    println!("Total events: {}", stats.total_events);
+
+    Ok(())
+}
+```
+
+Events are automatically stored locally in `~/.telemetry-kit/<service-name>.db`.
+
+## Need Help?
+
+- 📖 [Documentation](/docs) - Complete guides and API reference
+- 💬 [GitHub Discussions](https://github.com/ibrahimcesar/telemetry-kit/discussions) - Ask questions and share ideas
+- 🐛 [GitHub Issues](https://github.com/ibrahimcesar/telemetry-kit/issues) - Report bugs and request features
+- 📧 [Email](mailto:email@ibrahimcesar.com) - Direct support

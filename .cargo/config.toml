@@ -1,0 +1,34 @@
+# Cargo configuration for telemetry-kit
+
+[build]
+# Incremental compilation enabled by default
+
+[target.x86_64-unknown-linux-gnu]
+# Link-time optimization for release builds
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[profile.dev]
+# Faster compile times for development
+incremental = true
+opt-level = 0
+
+[profile.release]
+# Optimized release builds
+incremental = false
+lto = "thin"
+opt-level = 3
+codegen-units = 1
+strip = true
+
+[profile.bench]
+# Benchmark profile
+inherits = "release"
+lto = true
+
+[alias]
+# Useful aliases
+check-all = "check --all-features --all-targets"
+test-all = "test --all-features --all-targets"
+build-release = "build --release"
+fmt-check = "fmt -- --check"
+lint = "clippy -- -D warnings"

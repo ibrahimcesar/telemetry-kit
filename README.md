@@ -1,6 +1,6 @@
 <div align="center">
   
-# 🔭 telemetry-kit
+![Logo](./logo.svg)
 
 _Privacy-first usage analytics for library authors_
 
@@ -13,10 +13,11 @@ _Privacy-first usage analytics for library authors_
 </div>
 
 
-## 🎉 Currently Working (v0.0.1)
+## 🎉 Currently Working (v0.2.0-alpha.1)
 
 The following features are **fully implemented and tested**:
 
+- ✅ **Auto-Sync Background Task**: Automatic event synchronization in the background (NEW!)
 - ✅ **SQLite → Service Sync Protocol**: Offline-first event buffering with HMAC-SHA256 authentication
 - ✅ **Privacy-First User IDs**: Anonymous client identifiers with `client_` prefix (SHA-256 hashed machine IDs)
 - ✅ **Event Tracking**: Command and feature event builders with fluent API
@@ -38,7 +39,79 @@ cd ..
 cargo run --example e2e_sync_test
 ```
 
-See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for complete setup instructions.
+See [DEPLOYMENT_GUIDE.md](project-docs/DEPLOYMENT_GUIDE.md) for complete setup instructions.
+
+### Auto-Sync Background Task (NEW! 🎉)
+
+Events are now automatically synced in the background - no manual `.sync()` calls required!
+
+```rust
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Initialize with auto-sync (enabled by default)
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .with_sync_credentials(org_id, app_id, token, secret)?
+        .auto_sync(true)              // Enable auto-sync (default: true)
+        .sync_interval(60)            // Sync every 60 seconds (default)
+        .sync_on_shutdown(true)       // Sync before exit (default: true)
+        .build()?;
+
+    // Track events - they sync automatically in the background
+    telemetry.track_command("build", |event| {
+        event.success(true).duration_ms(1234)
+    }).await?;
+
+    // Graceful shutdown with final sync
+    telemetry.shutdown().await?;
+    Ok(())
+}
+```
+
+**Features:**
+- Background tokio task syncs events at configurable intervals
+- Graceful shutdown with optional final sync
+- Respects DO_NOT_TRACK environment variable
+- Exponential backoff on sync failures
+- Thread-safe implementation
+
+See [examples/auto_sync.rs](examples/auto_sync.rs) for a complete example.
+
+### CLI Tool (NEW! 🎉)
+
+Manage telemetry configuration and operations from the command line.
+
+```bash
+# Install CLI
+cargo install telemetry-kit --features cli
+
+# Interactive setup
+telemetry-kit init
+
+# View statistics
+telemetry-kit stats
+
+# Test sync credentials
+telemetry-kit test
+
+# Validate configuration
+telemetry-kit validate
+
+# Clean local events
+telemetry-kit clean
+```
+
+**Available Commands:**
+- `init` - Interactive project setup with credential configuration
+- `test` - Validate sync credentials
+- `stats` - View event statistics (total, synced, unsynced)
+- `sync` - Manually trigger synchronization
+- `validate` - Validate configuration
+- `clean` - Clear local event database
+
+See [CLI.md](project-docs/CLI.md) for complete CLI documentation.
 
 ---
 
@@ -96,17 +169,40 @@ telemetry_kit::init()
     .init();
 ```
 
-### Smart Instrumentation
+### Smart Instrumentation (NEW! 🎉)
+
+Enable automatic function instrumentation with the `macros` feature:
+
 ```rust
-#[instrument]                       // Auto-track duration & errors
-async fn fetch_data(url: &str) -> Result<Data> {
-    // Automatically captured:
-    // - Function duration
-    // - Success/failure
-    // - Error messages (sanitized)
-    // - Call frequency
+use telemetry_kit::prelude::*;
+
+#[instrument]  // Auto-track duration
+async fn fetch_data(url: &str) -> Result<Data, Error> {
+    // Function execution is automatically timed
+    // Works with both sync and async functions
+    // Supports Result types for success/failure tracking
+    let response = reqwest::get(url).await?;
+    let data = response.json().await?;
+    Ok(data)
 }
 ```
+
+**Features:**
+- Automatic execution timing for all instrumented functions
+- Works with async and sync functions
+- Supports functions with or without Result return types
+- Zero-overhead when macros feature is disabled
+- Compile-time code generation
+
+Enable with:
+```toml
+[dependencies]
+telemetry-kit = { version = "0.2", features = ["macros"] }
+```
+
+See [examples/instrument_macro.rs](examples/instrument_macro.rs) for a complete example.
+
+**Note:** Currently the macro measures timing but doesn't send telemetry yet. Full telemetry integration coming soon!
 
 ### CLI-Specific Features
 ```rust
@@ -319,11 +415,19 @@ We welcome contributions! This is a **new project** and we're building it in the
 
 ## 📚 Documentation
 
+### User Documentation
 - [Quick Start Guide](docs/quick-start.md) *(coming soon)*
 - [API Reference](https://docs.rs/telemetry-kit)
 - [Privacy Guide](docs/privacy.md) *(coming soon)*
 - [CLI Best Practices](docs/cli-best-practices.md) *(coming soon)*
 - [Self-Hosting Guide](docs/self-hosting.md) *(coming soon)*
+
+### Project Documentation
+- [Roadmap](ROADMAP.md) - Feature roadmap and release plan
+- [Security Policy](SECURITY.md) - Vulnerability disclosure and security practices
+- [SLSA Compliance](SLSA.md) - Supply chain security documentation
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
+- [Project Docs](project-docs/README.md) - Internal development documentation
 
 ## 💡 Inspiration
 
@@ -336,12 +440,25 @@ This project is inspired by:
 
 ## 📄 License
 
-Licensed under either of:
+This project is dual-licensed under your choice of:
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- **Apache License, Version 2.0** ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- **MIT License** ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
-at your option.
+You may choose either license at your option.
+
+### Why Dual License?
+
+We follow the Rust community standard of dual licensing to give you flexibility:
+
+- **Choose MIT** if you prefer simplicity and maximum compatibility (including GPL2)
+- **Choose Apache 2.0** if you want explicit patent protection and contributor agreements
+
+Both licenses are permissive and allow commercial use, modification, distribution, and private use.
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
 ## 🙏 Acknowledgments
 
@@ -351,6 +468,12 @@ Special thanks to:
 - The [OpenTelemetry](https://opentelemetry.io/) project
 - The [Rust tracing ecosystem](https://tokio.rs/tokio/topics/tracing)
 - Everyone who provided feedback and ideas
+
+### GNU Terry Pratchett
+
+This project includes the `X-Clacks-Overhead: GNU Terry Pratchett` header in all HTTP requests to keep the memory of Sir Terry Pratchett alive in the overhead of the internet. Learn more at [gnuterrypratchett.com](http://www.gnuterrypratchett.com/).
+
+> "A man is not dead while his name is still spoken." - Going Postal, Terry Pratchett
 
 ---
 

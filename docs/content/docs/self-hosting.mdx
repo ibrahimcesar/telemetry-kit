@@ -1,0 +1,337 @@
+---
+title: Self-Hosting
+description: Deploy and run your own telemetry-kit server
+icon: Server
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+## Overview
+
+telemetry-kit includes a **reference server implementation** that you can self-host. This gives you complete control over your telemetry data.
+
+<Callout type="warn" title="Recommended: Use Our Managed Service">
+This server is provided as a **reference implementation** and **starting point** for custom deployments. For production use, we recommend our **managed service** with a **free tier**:
+
+- ✨ **Free Tier:** 10,000 events/month
+- 🚀 **5-Minute Setup:** No infrastructure required
+- 📊 **Built-in Analytics:** Dashboard and insights
+- 🔒 **Fully Managed:** Updates, security, and scaling handled
+
+[Get Started with Managed Service →](https://telemetry-kit.dev)
+</Callout>
+
+<Callout type="info">
+The server reference implementation is located in the [`server/`](https://github.com/ibrahimcesar/telemetry-kit/tree/main/server) directory of the repository.
+</Callout>
+
+## Quick Start
+
+<Steps>
+<Step>
+
+### Clone the repository
+
+```bash
+git clone https://github.com/ibrahimcesar/telemetry-kit
+cd telemetry-kit/server
+```
+
+</Step>
+
+<Step>
+
+### Start with Docker Compose
+
+```bash
+docker compose up -d
+```
+
+This starts:
+- Axum ingestion API (port 3000)
+- PostgreSQL database (port 5432)
+
+</Step>
+
+<Step>
+
+### Verify it's running
+
+```bash
+curl http://localhost:3000/health
+```
+
+Should return:
+```json
+{"status":"healthy","version":"0.1.0"}
+```
+
+With header:
+```
+X-Clacks-Overhead: GNU Terry Pratchett
+```
+
+<Callout type="info">
+All responses include the `X-Clacks-Overhead: GNU Terry Pratchett` header as a tribute to Sir Terry Pratchett. Learn more at [gnuterrypratchett.com](http://www.gnuterrypratchett.com/).
+</Callout>
+
+</Step>
+</Steps>
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│  Client Applications                             │
+│  (Your Rust apps with telemetry-kit SDK)       │
+└──────────────────┬──────────────────────────────┘
+                   │ HTTPS + HMAC-SHA256
+                   ▼
+┌─────────────────────────────────────────────────┐
+│  Ingestion API (Axum)                           │
+│  - HMAC authentication                           │
+│  - Timestamp validation                          │
+│  - Batch processing                              │
+└──────────────────┬──────────────────────────────┘
+                   │
+                   ▼
+              ┌──────────┐
+              │PostgreSQL│
+              │(Events)  │
+              └──────────┘
+```
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file:
+
+```bash
+# Database
+DATABASE_URL=postgresql://telemetry:password@postgres:5432/telemetry
+
+# Server
+HOST=0.0.0.0
+PORT=3000
+LOG_LEVEL=info
+```
+
+### Docker Compose
+
+The default `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://telemetry:password@postgres:5432/telemetry
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: telemetry
+      POSTGRES_USER: telemetry
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+
+volumes:
+  postgres_data:
+```
+
+## Database Setup
+
+### Migrations
+
+Migrations are automatically run on container startup from `server/migrations/`.
+
+**001_initial_schema.sql:**
+
+```sql
+CREATE TABLE IF NOT EXISTS events (
+    event_id UUID PRIMARY KEY,
+    org_id VARCHAR(255) NOT NULL,
+    app_id VARCHAR(255) NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
+    session_id VARCHAR(255),
+    event_type VARCHAR(255) NOT NULL,
+    event_category VARCHAR(255),
+    event_data JSONB NOT NULL,
+    timestamp TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    INDEX idx_org_app (org_id, app_id),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_event_type (event_type)
+);
+
+CREATE TABLE IF NOT EXISTS organizations (
+    org_id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    tier VARCHAR(50) DEFAULT 'free',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS applications (
+    app_id VARCHAR(255) PRIMARY KEY,
+    org_id VARCHAR(255) REFERENCES organizations(org_id),
+    name VARCHAR(255) NOT NULL,
+    hmac_secret VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### Manual Migration
+
+To run migrations manually:
+
+```bash
+# Enter postgres container
+docker compose exec postgres psql -U telemetry -d telemetry
+
+# Run migration files
+\i /docker-entrypoint-initdb.d/001_initial_schema.sql
+```
+
+## Security
+
+### HMAC Authentication
+
+All requests must be signed with HMAC-SHA256:
+
+```
+Authorization: Bearer <api_token>
+X-Signature: <hmac_sha256_signature>
+X-Timestamp: <unix_timestamp>
+```
+
+**Signature Format:** `HMAC-SHA256(secret, timestamp:body)`
+
+The SDK handles this automatically.
+
+### Timestamp Validation
+
+Prevents replay attacks:
+- Timestamp must be within ±10 minutes of server time
+- Provides reasonable window for clock drift
+- No additional storage required
+
+## Production Deployment
+
+### Using a Reverse Proxy
+
+Put the API behind nginx or Caddy:
+
+**nginx example:**
+
+```nginx
+upstream telemetry_api {
+    server localhost:3000;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name telemetry.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://telemetry_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Health Checks
+
+Monitor the `/health` endpoint:
+
+```bash
+curl https://telemetry.example.com/health
+```
+
+### Scaling
+
+For high-volume deployments:
+
+1. **Horizontal Scaling** - Run multiple API instances behind a load balancer
+2. **Database** - Use managed PostgreSQL (RDS, Cloud SQL, etc.)
+3. **CDN** - Add CloudFlare or similar
+4. **Connection Pooling** - Configure appropriate database connection limits
+
+### Monitoring
+
+Key metrics to monitor:
+
+- Request rate (requests/second)
+- Error rate (5xx responses)
+- Latency (p50, p95, p99)
+- Database connections
+- Disk space (PostgreSQL)
+- Event ingestion rate
+
+## Backup and Recovery
+
+### Database Backups
+
+```bash
+# Backup
+docker compose exec postgres pg_dump -U telemetry telemetry > backup.sql
+
+# Restore
+docker compose exec -T postgres psql -U telemetry telemetry < backup.sql
+```
+
+### Automated Backups
+
+Add to crontab:
+
+```bash
+# Daily backup at 2 AM
+0 2 * * * cd /path/to/server && docker compose exec postgres pg_dump -U telemetry telemetry | gzip > backups/telemetry-$(date +\%Y\%m\%d).sql.gz
+```
+
+## Troubleshooting
+
+### API Not Starting
+
+Check logs:
+
+```bash
+docker compose logs api
+```
+
+Common issues:
+- Database not ready (wait for postgres to start)
+- Port 3000 already in use
+- Missing environment variables
+
+### Database Connection Errors
+
+```bash
+# Test database connectivity
+docker compose exec api psql $DATABASE_URL
+
+# Check postgres logs
+docker compose logs postgres
+```
+
+## See Also
+
+- [API Reference](/docs/api) - Complete API documentation
+- [Getting Started](/docs) - Client setup
+- [Auto-Sync](/docs/auto-sync) - Configure automatic sync
+- [GitHub](https://github.com/ibrahimcesar/telemetry-kit/tree/main/server) - Server source code

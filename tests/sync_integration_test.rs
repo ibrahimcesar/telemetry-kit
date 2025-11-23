@@ -20,7 +20,12 @@ async fn test_hmac_signature() {
     assert!(auth.verify(timestamp, nonce, body, &signature));
 
     // Tampered body should fail
-    assert!(!auth.verify(timestamp, nonce, r#"{"events":[{"hacked":true}]}"#, &signature));
+    assert!(!auth.verify(
+        timestamp,
+        nonce,
+        r#"{"events":[{"hacked":true}]}"#,
+        &signature
+    ));
 }
 
 #[test]
@@ -188,7 +193,7 @@ async fn test_event_builders() {
 
 #[test]
 fn test_user_id_generation() {
-    use telemetry_kit::user::{generate_user_id, generate_session_id};
+    use telemetry_kit::user::{generate_session_id, generate_user_id};
 
     // User ID should be stable
     let id1 = generate_user_id().unwrap();

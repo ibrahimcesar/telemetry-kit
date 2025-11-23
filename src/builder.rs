@@ -6,6 +6,12 @@ use crate::telemetry::TelemetryKit;
 #[cfg(feature = "sync")]
 use crate::sync::SyncConfig;
 
+#[cfg(feature = "sync")]
+use crate::auto_sync::AutoSyncConfig;
+
+#[cfg(feature = "privacy")]
+use crate::privacy::PrivacyConfig;
+
 use std::path::PathBuf;
 
 /// Builder for configuring telemetry
@@ -19,7 +25,13 @@ pub struct TelemetryBuilder {
     sync_config: Option<SyncConfig>,
 
     #[cfg(feature = "sync")]
-    auto_sync: bool,
+    auto_sync_enabled: bool,
+
+    #[cfg(feature = "sync")]
+    auto_sync_config: AutoSyncConfig,
+
+    #[cfg(feature = "privacy")]
+    privacy_config: Option<PrivacyConfig>,
 }
 
 impl TelemetryBuilder {
@@ -37,9 +49,9 @@ impl TelemetryBuilder {
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
         {
-            return Err(TelemetryError::InvalidConfig(
-                "Service name must contain only lowercase alphanumeric, dashes, and underscores"
-                    .to_string(),
+            return Err(TelemetryError::invalid_config(
+                "service_name",
+                &format!("'{}' contains invalid characters. Use only lowercase letters, numbers, dashes, and underscores (e.g., 'my-app', 'cli_tool')", name_str)
             ));
         }
 
@@ -66,10 +78,24 @@ impl TelemetryBuilder {
         self
     }
 
-    /// Enable automatic background syncing
+    /// Enable automatic background syncing (enabled by default)
     #[cfg(feature = "sync")]
-    pub fn enable_auto_sync(mut self) -> Self {
-        self.auto_sync = true;
+    pub fn auto_sync(mut self, enabled: bool) -> Self {
+        self.auto_sync_enabled = enabled;
+        self
+    }
+
+    /// Set the auto-sync interval in seconds (default: 60)
+    #[cfg(feature = "sync")]
+    pub fn sync_interval(mut self, seconds: u64) -> Self {
+        self.auto_sync_config.interval = seconds;
+        self
+    }
+
+    /// Configure whether to sync on shutdown (default: true)
+    #[cfg(feature = "sync")]
+    pub fn sync_on_shutdown(mut self, enabled: bool) -> Self {
+        self.auto_sync_config.sync_on_shutdown = enabled;
         self
     }
 
@@ -93,11 +119,76 @@ impl TelemetryBuilder {
         Ok(self)
     }
 
+    /// Configure privacy settings
+    #[cfg(feature = "privacy")]
+    pub fn privacy(mut self, config: PrivacyConfig) -> Self {
+        self.privacy_config = Some(config);
+        self
+    }
+
+    /// Shorthand for enabling strict privacy mode (GDPR-compliant)
+    #[cfg(feature = "privacy")]
+    pub fn strict_privacy(mut self) -> Self {
+        self.privacy_config = Some(PrivacyConfig::strict());
+        self
+    }
+
+    /// Shorthand for minimal privacy mode
+    #[cfg(feature = "privacy")]
+    pub fn minimal_privacy(mut self) -> Self {
+        self.privacy_config = Some(PrivacyConfig::minimal());
+        self
+    }
+
+    /// Require user consent before tracking
+    #[cfg(feature = "privacy")]
+    pub fn consent_required(mut self, required: bool) -> Self {
+        let config = self.privacy_config.unwrap_or_default();
+        self.privacy_config = Some(PrivacyConfig {
+            consent_required: required,
+            ..config
+        });
+        self
+    }
+
+    /// Set data retention period in days (0 = forever)
+    #[cfg(feature = "privacy")]
+    pub fn data_retention(mut self, days: u32) -> Self {
+        let config = self.privacy_config.unwrap_or_default();
+        self.privacy_config = Some(PrivacyConfig {
+            data_retention_days: days,
+            ..config
+        });
+        self
+    }
+
+    /// Enable or disable path sanitization
+    #[cfg(feature = "privacy")]
+    pub fn sanitize_paths(mut self, enabled: bool) -> Self {
+        let config = self.privacy_config.unwrap_or_default();
+        self.privacy_config = Some(PrivacyConfig {
+            sanitize_paths: enabled,
+            ..config
+        });
+        self
+    }
+
+    /// Enable or disable email sanitization
+    #[cfg(feature = "privacy")]
+    pub fn sanitize_emails(mut self, enabled: bool) -> Self {
+        let config = self.privacy_config.unwrap_or_default();
+        self.privacy_config = Some(PrivacyConfig {
+            sanitize_emails: enabled,
+            ..config
+        });
+        self
+    }
+
     /// Build the TelemetryKit instance
     pub fn build(self) -> Result<TelemetryKit> {
         let service_name = self
             .service_name
-            .ok_or_else(|| TelemetryError::InvalidConfig("service_name is required".to_string()))?;
+            .ok_or_else(|| TelemetryError::missing_field("service_name"))?;
 
         let service_version = self
             .service_version
@@ -109,7 +200,10 @@ impl TelemetryBuilder {
         } else {
             // Default: ~/.telemetry-kit/<service_name>.db
             let mut path = dirs::home_dir()
-                .ok_or_else(|| TelemetryError::InvalidConfig("Cannot determine home directory".to_string()))?;
+                .ok_or_else(|| TelemetryError::invalid_config(
+                    "database_path",
+                    "Cannot determine home directory. Please set an explicit database path with .db_path()"
+                ))?;
             path.push(".telemetry-kit");
             path.push(format!("{}.db", service_name));
             path
@@ -122,7 +216,11 @@ impl TelemetryBuilder {
             #[cfg(feature = "sync")]
             self.sync_config,
             #[cfg(feature = "sync")]
-            self.auto_sync,
+            self.auto_sync_enabled,
+            #[cfg(feature = "sync")]
+            self.auto_sync_config,
+            #[cfg(feature = "privacy")]
+            self.privacy_config,
         )
     }
 }

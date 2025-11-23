@@ -1,6 +1,6 @@
 [package]
 name = "telemetry-kit"
-version = "0.0.1"
+version = "0.2.0-alpha.1"
 edition = "2021"
 authors = ["Ibrahim Cesar <email@ibrahimcesar.com>"]
 license = "MIT OR Apache-2.0"
@@ -50,17 +50,33 @@ rand = "0.8"
 # Directory helpers
 dirs = "5.0"
 
+# Procedural macros
+telemetry-kit-macros = { version = "0.2.0-alpha.1", path = "telemetry-kit-macros", optional = true }
+
+# Node.js bindings (optional)
+napi = { version = "2.16", features = ["async", "tokio_rt"], optional = true }
+napi-derive = { version = "2.16", optional = true }
+
+# CLI dependencies (optional)
+clap = { version = "4.4", features = ["derive", "color", "suggestions"], optional = true }
+dialoguer = { version = "0.11", optional = true }
+indicatif = { version = "0.17", optional = true }
+colored = { version = "2.1", optional = true }
+
 [dev-dependencies]
 tokio-test = "0.4"
 wiremock = "0.6"
+proptest = "1.4"
+criterion = { version = "0.5", features = ["async_tokio"] }
 
 [features]
-default = ["sync"]
+default = ["sync", "privacy"]
 sync = ["tokio"]
-cli = []
+cli = ["clap", "dialoguer", "indicatif", "colored", "tokio"]
+privacy = []
+napi-bindings = ["napi", "napi-derive", "tokio"]
+macros = ["telemetry-kit-macros"]
 # Future features:
-# auto-instrument = []
-# privacy = []
 # simple-server = []
 
 [lib]
@@ -72,10 +88,14 @@ name = "telemetry-kit"
 path = "src/bin/cli.rs"
 required-features = ["cli"]
 
+[[bench]]
+name = "telemetry_benchmarks"
+harness = false
+
 [workspace]
 members = [
     ".",
-    "server",
+    "server", "telemetry-kit-macros",
     # Future workspace members:
     # "telemetry-kit-cli",
     # "telemetry-kit-macros",

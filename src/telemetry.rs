@@ -3,8 +3,8 @@
 use crate::builder::TelemetryBuilder;
 use crate::error::{Result, TelemetryError};
 use crate::event::{
-    CommandEventBuilder, Environment, Event, EventBatch, EventData, FeatureEventBuilder,
-    Metadata, ServiceInfo, SCHEMA_VERSION,
+    CommandEventBuilder, Environment, Event, EventBatch, EventData, FeatureEventBuilder, Metadata,
+    ServiceInfo, SCHEMA_VERSION,
 };
 use crate::storage::EventStorage;
 use crate::user::{generate_session_id, generate_user_id};
@@ -16,6 +16,15 @@ use uuid::Uuid;
 
 #[cfg(feature = "sync")]
 use crate::sync::{SyncClient, SyncConfig};
+
+#[cfg(feature = "sync")]
+use crate::auto_sync::{AutoSyncConfig, AutoSyncTask};
+
+#[cfg(feature = "sync")]
+use tokio::sync::Mutex;
+
+#[cfg(feature = "privacy")]
+use crate::privacy::{PrivacyConfig, PrivacyManager};
 
 const SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -34,6 +43,12 @@ struct TelemetryKitInner {
 
     #[cfg(feature = "sync")]
     sync_client: Option<SyncClient>,
+
+    #[cfg(feature = "sync")]
+    auto_sync_task: Option<Arc<Mutex<AutoSyncTask>>>,
+
+    #[cfg(feature = "privacy")]
+    privacy_manager: Option<PrivacyManager>,
 }
 
 impl TelemetryKit {
@@ -48,16 +63,44 @@ impl TelemetryKit {
         service_version: String,
         db_path: PathBuf,
         #[cfg(feature = "sync")] sync_config: Option<SyncConfig>,
-        #[cfg(feature = "sync")] _auto_sync: bool,
+        #[cfg(feature = "sync")] auto_sync_enabled: bool,
+        #[cfg(feature = "sync")] auto_sync_config: AutoSyncConfig,
+        #[cfg(feature = "privacy")] privacy_config: Option<PrivacyConfig>,
     ) -> Result<Self> {
         let user_id = generate_user_id()?;
         let session_id = generate_session_id();
         let environment = detect_environment();
         let storage = EventStorage::new(db_path)?;
+        let storage_arc = Arc::new(RwLock::new(storage));
 
         #[cfg(feature = "sync")]
         let sync_client = if let Some(config) = sync_config {
             Some(SyncClient::new(config)?)
+        } else {
+            None
+        };
+
+        // Start auto-sync task if enabled and sync is configured
+        #[cfg(feature = "sync")]
+        let auto_sync_task = if auto_sync_enabled {
+            if let Some(client) = sync_client.as_ref() {
+                let task = AutoSyncTask::start(
+                    Arc::new(client.clone()),
+                    storage_arc.clone(),
+                    auto_sync_config,
+                );
+                Some(Arc::new(Mutex::new(task)))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Create privacy manager if privacy config is provided
+        #[cfg(feature = "privacy")]
+        let privacy_manager = if let Some(config) = privacy_config {
+            Some(PrivacyManager::new(config, &service_name)?)
         } else {
             None
         };
@@ -68,9 +111,13 @@ impl TelemetryKit {
             user_id,
             session_id,
             environment,
-            storage: Arc::new(RwLock::new(storage)),
+            storage: storage_arc,
             #[cfg(feature = "sync")]
             sync_client,
+            #[cfg(feature = "sync")]
+            auto_sync_task,
+            #[cfg(feature = "privacy")]
+            privacy_manager,
         });
 
         Ok(Self { inner })
@@ -145,6 +192,22 @@ impl TelemetryKit {
         category: Option<&str>,
         data: serde_json::Value,
     ) -> Result<()> {
+        // Check privacy settings - should we track this event?
+        #[cfg(feature = "privacy")]
+        if let Some(privacy_manager) = &self.inner.privacy_manager {
+            if !privacy_manager.should_track()? {
+                // User has opted out or denied consent - don't track
+                return Ok(());
+            }
+        }
+
+        // Apply data sanitization
+        let mut sanitized_data = data;
+        #[cfg(feature = "privacy")]
+        if let Some(privacy_manager) = &self.inner.privacy_manager {
+            privacy_manager.sanitize_data(&mut sanitized_data);
+        }
+
         let event = Event {
             schema_version: SCHEMA_VERSION.to_string(),
             event_id: Uuid::new_v4(),
@@ -161,7 +224,7 @@ impl TelemetryKit {
             event: EventData {
                 event_type: event_type.into(),
                 category: category.map(|s| s.to_string()),
-                data,
+                data: sanitized_data,
             },
             metadata: Metadata {
                 sdk_version: format!("telemetry-kit-rust/{}", SDK_VERSION),
@@ -176,8 +239,7 @@ impl TelemetryKit {
         storage.insert(&event)?;
         drop(storage);
 
-        // Note: Auto-sync is not yet implemented due to SQLite thread-safety constraints.
-        // Call .sync() manually to sync events to the server.
+        // Auto-sync task will pick up the event on next interval (if enabled)
 
         Ok(())
     }
@@ -188,8 +250,9 @@ impl TelemetryKit {
         if let Some(client) = &self.inner.sync_client {
             Self::sync_events(Arc::new(client.clone()), self.inner.storage.clone()).await
         } else {
-            Err(TelemetryError::InvalidConfig(
-                "Sync is not configured".to_string(),
+            Err(TelemetryError::invalid_config(
+                "sync",
+                "Sync is not configured. Use .with_sync_credentials() when building TelemetryKit",
             ))
         }
     }
@@ -245,6 +308,80 @@ impl TelemetryKit {
         let storage = self.inner.storage.write().await;
         storage.cleanup_old_events()
     }
+
+    /// Grant user consent for telemetry tracking
+    #[cfg(feature = "privacy")]
+    pub fn grant_consent(&self) -> Result<()> {
+        if let Some(privacy_manager) = &self.inner.privacy_manager {
+            privacy_manager.grant_consent(&self.inner.service_name)
+        } else {
+            Err(TelemetryError::invalid_config(
+                "privacy",
+                "Privacy features are not enabled. Use .privacy() or .strict_privacy() when building TelemetryKit"
+            ))
+        }
+    }
+
+    /// Deny user consent for telemetry tracking
+    #[cfg(feature = "privacy")]
+    pub fn deny_consent(&self) -> Result<()> {
+        if let Some(privacy_manager) = &self.inner.privacy_manager {
+            privacy_manager.deny_consent(&self.inner.service_name)
+        } else {
+            Err(TelemetryError::invalid_config(
+                "privacy",
+                "Privacy features are not enabled. Use .privacy() or .strict_privacy() when building TelemetryKit"
+            ))
+        }
+    }
+
+    /// Opt out of telemetry tracking (equivalent to DO_NOT_TRACK)
+    #[cfg(feature = "privacy")]
+    pub fn opt_out(&self) -> Result<()> {
+        if let Some(privacy_manager) = &self.inner.privacy_manager {
+            privacy_manager.opt_out(&self.inner.service_name)
+        } else {
+            Err(TelemetryError::InvalidConfig(
+                "Privacy features are not enabled".to_string(),
+            ))
+        }
+    }
+
+    /// Check if DO_NOT_TRACK environment variable is set
+    #[cfg(feature = "privacy")]
+    pub fn is_do_not_track_enabled() -> bool {
+        PrivacyManager::is_do_not_track_enabled()
+    }
+
+    /// Gracefully shutdown auto-sync task and optionally perform final sync
+    #[cfg(feature = "sync")]
+    pub async fn shutdown(&self) -> Result<()> {
+        if let Some(task_mutex) = &self.inner.auto_sync_task {
+            let mut task = task_mutex.lock().await;
+
+            // Perform final sync if configured
+            if task.should_sync_on_shutdown() {
+                if let Some(client) = &self.inner.sync_client {
+                    let _ = Self::sync_events(Arc::new(client.clone()), self.inner.storage.clone())
+                        .await;
+                }
+            }
+
+            // Shutdown the background task
+            task.shutdown();
+            task.join().await?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "sync")]
+impl Drop for TelemetryKit {
+    fn drop(&mut self) {
+        // Note: We can't perform async operations in Drop
+        // Users should call .shutdown() explicitly for graceful shutdown
+        // The auto-sync task will stop automatically via its own Drop
+    }
 }
 
 impl Clone for SyncClient {
@@ -288,9 +425,11 @@ fn is_ci() -> bool {
 
 /// Detect shell
 fn detect_shell() -> Option<String> {
-    std::env::var("SHELL")
-        .ok()
-        .and_then(|s| std::path::Path::new(&s).file_name().map(|f| f.to_string_lossy().to_string()))
+    std::env::var("SHELL").ok().and_then(|s| {
+        std::path::Path::new(&s)
+            .file_name()
+            .map(|f| f.to_string_lossy().to_string())
+    })
 }
 
 /// Get Rust compiler version

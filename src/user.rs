@@ -15,9 +15,8 @@ const SALT: &str = "telemetry-kit-v1";
 /// - Cannot be reverse-engineered to get the machine ID
 /// - Does not contain any PII
 pub fn generate_user_id() -> Result<String> {
-    let machine_id = machine_uid::get().map_err(|e| {
-        TelemetryError::MachineId(format!("Failed to get machine ID: {}", e))
-    })?;
+    let machine_id = machine_uid::get()
+        .map_err(|e| TelemetryError::MachineId(format!("Failed to get machine ID: {}", e)))?;
 
     let mut hasher = Sha256::new();
     hasher.update(machine_id.as_bytes());

@@ -1,0 +1,15 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "auto-sync",
+    "cli",
+    "---API Reference---",
+    "api",
+    "error-handling",
+    "---Guides---",
+    "self-hosting",
+    "privacy",
+    "examples"
+  ]
+}

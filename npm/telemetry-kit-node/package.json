@@ -1,0 +1,60 @@
+{
+  "name": "@telemetry-kit/node",
+  "version": "0.1.0",
+  "description": "Privacy-first telemetry for Node.js - native bindings to telemetry-kit Rust SDK",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ibrahimcesar/telemetry-kit.git",
+    "directory": "npm/telemetry-kit-node"
+  },
+  "license": "MIT OR Apache-2.0",
+  "keywords": [
+    "telemetry",
+    "analytics",
+    "privacy",
+    "tracking",
+    "metrics",
+    "observability",
+    "napi-rs",
+    "rust"
+  ],
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ],
+  "napi": {
+    "name": "telemetry-kit",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-unknown-linux-musl",
+        "armv7-unknown-linux-gnueabihf",
+        "x86_64-unknown-linux-musl"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">= 16"
+  },
+  "scripts": {
+    "build": "napi build --platform --release --pipe \"prettier -w\"",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "node --test",
+    "version": "napi version"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0",
+    "prettier": "^3.2.0"
+  },
+  "packageManager": "npm@10.2.4",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  }
+}

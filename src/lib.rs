@@ -50,6 +50,15 @@ pub mod user;
 #[cfg(feature = "sync")]
 pub mod sync;
 
+#[cfg(feature = "sync")]
+pub mod auto_sync;
+
+#[cfg(feature = "privacy")]
+pub mod privacy;
+
+#[cfg(feature = "napi-bindings")]
+pub mod bindings;
+
 mod builder;
 mod telemetry;
 
@@ -57,17 +66,23 @@ pub use builder::TelemetryBuilder;
 pub use error::{Result, TelemetryError};
 pub use telemetry::TelemetryKit;
 
+// Re-export procedural macros
+#[cfg(feature = "macros")]
+pub use telemetry_kit_macros::instrument;
+
 /// Prelude module for convenient imports
+///
+/// ```rust
+/// use telemetry_kit::prelude::*;
+/// ```
 pub mod prelude {
-    //! Commonly used imports for telemetry-kit
-    //!
-    //! ```rust
-    //! use telemetry_kit::prelude::*;
-    //! ```
     pub use crate::builder::TelemetryBuilder;
     pub use crate::error::{Result, TelemetryError};
     pub use crate::event::*;
     pub use crate::telemetry::TelemetryKit;
+
+    #[cfg(feature = "macros")]
+    pub use crate::instrument;
 }
 
 #[cfg(test)]

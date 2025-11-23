@@ -1,0 +1,440 @@
+---
+title: Privacy Controls
+description: GDPR-compliant privacy features including consent management, DO_NOT_TRACK support, and data sanitization
+icon: Shield
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+telemetry-kit includes comprehensive privacy controls to help you build GDPR-compliant applications:
+
+- **DO_NOT_TRACK Support** - Automatically respects the `DO_NOT_TRACK` environment variable
+- **Consent Management** - User consent tracking with persistent storage
+- **Data Sanitization** - Automatic removal of PII (paths, emails)
+- **Data Retention** - Configurable retention policies
+- **Privacy Presets** - Pre-configured strict, default, and minimal modes
+
+<Callout type="info">
+Privacy features are enabled by default in telemetry-kit v0.2.0+
+</Callout>
+
+## Quick Start
+
+<Steps>
+<Step>
+
+### Use Default Privacy
+
+The simplest approach with sensible defaults:
+
+```rust
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> telemetry_kit::Result<()> {
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .build()?;
+
+    // Privacy enabled by default:
+    // - Respects DO_NOT_TRACK
+    // - Sanitizes paths and emails
+    // - 90-day retention
+
+    Ok(())
+}
+```
+
+</Step>
+
+<Step>
+
+### Check DO_NOT_TRACK
+
+Always check if the user has opted out:
+
+```rust
+if TelemetryKit::is_do_not_track_enabled() {
+    println!("Telemetry disabled by user preference");
+    return Ok(());
+}
+```
+
+</Step>
+
+<Step>
+
+### Track Events
+
+Events are automatically sanitized:
+
+```rust
+telemetry.track_command("build", |event| {
+    event
+        .flag("--release")
+        .success(true)
+}).await?;
+
+// Paths like /Users/john/project → ~/project
+// Emails like user@example.com → email_<hash>
+```
+
+</Step>
+</Steps>
+
+## Privacy Presets
+
+### Strict Mode (GDPR-Compliant)
+
+Maximum privacy protection, suitable for EU applications:
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .strict_privacy()  // Enables strictest settings
+    .build()?;
+
+// Strict mode settings:
+// - Consent required: Yes
+// - DO_NOT_TRACK respected: Yes
+// - Path sanitization: Yes
+// - Email sanitization: Yes
+// - Data retention: 30 days
+// - IP anonymization: Yes
+```
+
+### Default Mode (Recommended)
+
+Balanced privacy and functionality:
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .build()?;  // Uses default privacy
+
+// Default settings:
+// - Consent required: No
+// - DO_NOT_TRACK respected: Yes
+// - Path sanitization: Yes
+// - Email sanitization: Yes
+// - Data retention: 90 days
+// - IP anonymization: Yes
+```
+
+### Minimal Mode
+
+Minimal privacy restrictions (not recommended for production):
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .minimal_privacy()
+    .build()?;
+
+// Minimal settings:
+// - Consent required: No
+// - DO_NOT_TRACK respected: Yes (always)
+// - Path sanitization: No
+// - Email sanitization: No
+// - Data retention: Forever
+// - IP anonymization: No
+```
+
+## Consent Management
+
+### Require User Consent
+
+For GDPR compliance, require explicit consent:
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .consent_required(true)
+    .build()?;
+
+// Events will be silently ignored until consent is granted
+telemetry.track_command("test", |e| e.success(true)).await?;
+// ↑ Not tracked (no consent yet)
+
+// Grant consent
+telemetry.grant_consent()?;
+
+// Now tracking works
+telemetry.track_command("test", |e| e.success(true)).await?;
+// ↑ Tracked successfully
+```
+
+### Consent Status
+
+Consent is stored persistently in `~/.telemetry-kit/{service-name}-consent.json`:
+
+```json
+{
+  "status": "Granted",
+  "timestamp": "2025-01-15T10:30:00Z",
+  "service_name": "my-app"
+}
+```
+
+### Deny Consent
+
+```rust
+telemetry.deny_consent()?;
+
+// All tracking is now disabled
+telemetry.track_command("test", |e| e.success(true)).await?;
+// ↑ Silently ignored
+```
+
+### Opt Out
+
+Equivalent to setting `DO_NOT_TRACK=1`:
+
+```rust
+telemetry.opt_out()?;
+
+// User has opted out - no tracking
+```
+
+## DO_NOT_TRACK Support
+
+telemetry-kit always respects the `DO_NOT_TRACK` environment variable:
+
+```bash
+# Disable telemetry via environment variable
+export DO_NOT_TRACK=1
+
+# Now all tracking is disabled
+cargo run
+```
+
+Check programmatically:
+
+```rust
+if TelemetryKit::is_do_not_track_enabled() {
+    println!("User has opted out of telemetry");
+    return Ok(());
+}
+```
+
+Accepted values:
+- `DO_NOT_TRACK=1` → Telemetry disabled
+- `DO_NOT_TRACK=true` → Telemetry disabled
+- `DO_NOT_TRACK=0` → Telemetry enabled
+- `DO_NOT_TRACK=false` → Telemetry enabled
+- Not set → Telemetry enabled (unless consent required)
+
+## Data Sanitization
+
+### Automatic Sanitization
+
+By default, telemetry-kit sanitizes:
+
+1. **File Paths** - Removes usernames
+2. **Email Addresses** - Hashed to protect identity
+
+```rust
+// Before sanitization
+let data = json!({
+    "path": "/Users/john/Documents/project",
+    "email": "john@example.com"
+});
+
+// After sanitization
+let data = json!({
+    "path": "~/Documents/project",
+    "email": "email_a1b2c3d4"
+});
+```
+
+### Manual Sanitization
+
+Use the PrivacyManager directly:
+
+```rust
+use telemetry_kit::privacy::PrivacyManager;
+
+// Sanitize a path
+let safe_path = PrivacyManager::sanitize_path("/Users/john/secret.txt");
+println!("{}", safe_path);  // ~/secret.txt
+
+// Sanitize an email
+let safe_email = PrivacyManager::sanitize_email("user@example.com");
+println!("{}", safe_email);  // email_b4c9a289323b21a0
+```
+
+### Configure Sanitization
+
+Control what gets sanitized:
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .sanitize_paths(true)   // Default: true
+    .sanitize_emails(true)  // Default: true
+    .build()?;
+```
+
+## Data Retention
+
+Configure how long telemetry data is kept:
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .data_retention(30)  // Keep for 30 days
+    .build()?;
+
+// Clean up old data
+let deleted = telemetry.cleanup().await?;
+println!("Deleted {} old events", deleted);
+```
+
+Retention values:
+- `0` = Forever (not recommended)
+- `30` = 30 days (strict mode default)
+- `90` = 90 days (default mode default)
+- Any positive number = That many days
+
+## Custom Privacy Configuration
+
+Fine-tune privacy settings:
+
+```rust
+use telemetry_kit::privacy::PrivacyConfig;
+
+let config = PrivacyConfig {
+    consent_required: true,
+    respect_do_not_track: true,  // Always true
+    sanitize_paths: true,
+    sanitize_emails: true,
+    data_retention_days: 60,
+    anonymize_ips: true,
+};
+
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .privacy(config)
+    .build()?;
+```
+
+## Best Practices
+
+### 1. Always Respect DO_NOT_TRACK
+
+```rust
+if TelemetryKit::is_do_not_track_enabled() {
+    return Ok(());  // Exit early
+}
+```
+
+### 2. Use Strict Mode for EU Applications
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .strict_privacy()  // GDPR-compliant
+    .build()?;
+```
+
+### 3. Prompt for Consent (GDPR)
+
+```rust
+use dialoguer::Confirm;
+
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .consent_required(true)
+    .build()?;
+
+// Ask user for consent
+if Confirm::new()
+    .with_prompt("Allow anonymous usage statistics?")
+    .interact()?
+{
+    telemetry.grant_consent()?;
+    println!("Thank you!");
+} else {
+    telemetry.deny_consent()?;
+}
+```
+
+### 4. Set Appropriate Retention
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .data_retention(30)  // GDPR recommends 30-90 days
+    .build()?;
+```
+
+### 5. Enable Sanitization
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .sanitize_paths(true)   // Remove usernames
+    .sanitize_emails(true)  // Hash emails
+    .build()?;
+```
+
+## GDPR Compliance Checklist
+
+To ensure GDPR compliance:
+
+- [ ] Use `.strict_privacy()` or `.consent_required(true)`
+- [ ] Prompt users for consent before tracking
+- [ ] Respect DO_NOT_TRACK environment variable
+- [ ] Set data retention ≤ 90 days
+- [ ] Enable path and email sanitization
+- [ ] Provide opt-out mechanism
+- [ ] Document what data is collected
+- [ ] Allow users to request data deletion
+
+## Privacy API Reference
+
+### TelemetryBuilder Methods
+
+```rust
+.strict_privacy()           // Use strict preset
+.minimal_privacy()          // Use minimal preset
+.privacy(config)            // Custom config
+.consent_required(bool)     // Require consent
+.data_retention(days)       // Retention period
+.sanitize_paths(bool)       // Path sanitization
+.sanitize_emails(bool)      // Email sanitization
+```
+
+### TelemetryKit Methods
+
+```rust
+.grant_consent()            // Grant consent
+.deny_consent()             // Deny consent
+.opt_out()                  // Opt out completely
+.is_do_not_track_enabled()  // Check DNT (static)
+```
+
+### PrivacyManager Methods
+
+```rust
+PrivacyManager::sanitize_path(path)   // Sanitize path
+PrivacyManager::sanitize_email(email) // Sanitize email
+```
+
+## Examples
+
+See [examples/privacy.rs](https://github.com/ibrahimcesar/telemetry-kit/blob/main/examples/privacy.rs) for complete working examples.
+
+## Server-Side DNT Metrics
+
+The telemetry server can track how many requests include the `DO_NOT_TRACK` header without violating privacy:
+
+- Client respects DNT by not sending events
+- Server logs requests WITH DNT header
+- Aggregated metrics show: "X requests with DNT vs Y without"
+- This doesn't violate privacy (server-side aggregation only)
+
+See [Self-Hosting](/docs/self-hosting) for server configuration.

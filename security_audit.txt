@@ -1,0 +1,13 @@
+error[unexpected-keys]: found 1 unexpected keys, expected: ["version", "db-path", "db-urls", "vulnerability", "unsound", "notice", "unmaintained", "yanked", "ignore", "severity-threshold", "git-fetch-with-cli", "disable-yank-checking", "maximum-db-staleness"]
+   ┌─ /Users/ibrahimcesar/Dev/telemetry-kit/deny.toml:23:13
+   │
+23 │ [advisories.severity]
+   │             ────────
+
+error[unexpected-keys]: found 1 unexpected keys, expected: ["unknown-registry", "unknown-git", "allow-registry", "allow-git", "allow-org", "private", "required-git-spec", "unused-allowed-source"]
+    ┌─ /Users/ibrahimcesar/Dev/telemetry-kit/deny.toml:101:10
+    │
+101 │ [sources.allow-orgs]
+    │          ──────────
+
+2025-11-23 02:59:48 [ERROR] failed to deserialize config from '/Users/ibrahimcesar/Dev/telemetry-kit/deny.toml'

@@ -95,10 +95,7 @@ impl SyncClient {
         headers.insert("X-Signature", signature.parse().unwrap());
         headers.insert("X-Timestamp", timestamp.parse().unwrap());
         headers.insert("X-Nonce", nonce.parse().unwrap());
-        headers.insert(
-            "X-Batch-Size",
-            batch.size().to_string().parse().unwrap(),
-        );
+        headers.insert("X-Batch-Size", batch.size().to_string().parse().unwrap());
         headers.insert(
             "X-SDK-Version",
             format!("telemetry-kit-rust/{}", SDK_VERSION)
@@ -106,6 +103,10 @@ impl SyncClient {
                 .unwrap(),
         );
         headers.insert("X-Schema-Version", SCHEMA_VERSION.parse().unwrap());
+
+        // GNU Terry Pratchett - keeping his memory alive in the overhead
+        // See: http://www.gnuterrypratchett.com/
+        headers.insert("X-Clacks-Overhead", "GNU Terry Pratchett".parse().unwrap());
 
         // Send request
         let url = self.config.ingestion_url();
@@ -188,8 +189,6 @@ fn is_dnt_enabled() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::{Environment, Event, EventData, Metadata, ServiceInfo, SCHEMA_VERSION};
-    use chrono::Utc;
 
     fn create_test_config() -> SyncConfig {
         SyncConfig::builder()
@@ -201,40 +200,6 @@ mod tests {
             .secret("test_secret")
             .build()
             .unwrap()
-    }
-
-    fn create_test_event() -> Event {
-        Event {
-            schema_version: SCHEMA_VERSION.to_string(),
-            event_id: Uuid::new_v4(),
-            timestamp: Utc::now(),
-            service: ServiceInfo {
-                name: "test-service".to_string(),
-                version: "1.0.0".to_string(),
-                language: "rust".to_string(),
-                language_version: Some("1.75.0".to_string()),
-            },
-            user_id: "client_test123".to_string(),
-            session_id: Some("sess_test456".to_string()),
-            environment: Environment {
-                os: "linux".to_string(),
-                os_version: None,
-                arch: Some("x86_64".to_string()),
-                ci: Some(false),
-                shell: None,
-            },
-            event: EventData {
-                event_type: "test_event".to_string(),
-                category: Some("test".to_string()),
-                data: serde_json::json!({"test": true}),
-            },
-            metadata: Metadata {
-                sdk_version: SDK_VERSION.to_string(),
-                transmission_timestamp: Utc::now(),
-                batch_size: 1,
-                retry_count: 0,
-            },
-        }
     }
 
     #[test]

@@ -1,0 +1,130 @@
+   Compiling telemetry-kit v0.2.0-alpha.1 (/Users/ibrahimcesar/Dev/telemetry-kit)
+    Finished `bench` profile [optimized] target(s) in 33.93s
+     Running benches/telemetry_benchmarks.rs (target/release/deps/telemetry_benchmarks-ffb6de2df9cccbc0)
+Gnuplot not found, using plotters backend
+Benchmarking event_creation_command
+Benchmarking event_creation_command: Warming up for 3.0000 s
+Benchmarking event_creation_command: Collecting 100 samples in estimated 5.0039 s (200 iterations)
+Benchmarking event_creation_command: Analyzing
+event_creation_command  time:   [25.449 ms 26.811 ms 28.248 ms]
+Found 9 outliers among 100 measurements (9.00%)
+  8 (8.00%) high mild
+  1 (1.00%) high severe
+
+Benchmarking privacy_sanitization/sanitize_path
+Benchmarking privacy_sanitization/sanitize_path: Warming up for 3.0000 s
+Benchmarking privacy_sanitization/sanitize_path: Collecting 100 samples in estimated 5.0021 s (11M iterations)
+Benchmarking privacy_sanitization/sanitize_path: Analyzing
+privacy_sanitization/sanitize_path
+                        time:   [249.38 ns 251.75 ns 254.47 ns]
+Found 20 outliers among 100 measurements (20.00%)
+  5 (5.00%) high mild
+  15 (15.00%) high severe
+Benchmarking privacy_sanitization/sanitize_email
+Benchmarking privacy_sanitization/sanitize_email: Warming up for 3.0000 s
+Benchmarking privacy_sanitization/sanitize_email: Collecting 100 samples in estimated 5.0018 s (11M iterations)
+Benchmarking privacy_sanitization/sanitize_email: Analyzing
+privacy_sanitization/sanitize_email
+                        time:   [406.33 ns 428.03 ns 453.81 ns]
+Found 8 outliers among 100 measurements (8.00%)
+  4 (4.00%) high mild
+  4 (4.00%) high severe
+Benchmarking privacy_sanitization/sanitize_nested_data
+Benchmarking privacy_sanitization/sanitize_nested_data: Warming up for 3.0000 s
+Benchmarking privacy_sanitization/sanitize_nested_data: Collecting 100 samples in estimated 5.0008 s (2.5M iterations)
+Benchmarking privacy_sanitization/sanitize_nested_data: Analyzing
+privacy_sanitization/sanitize_nested_data
+                        time:   [1.9333 µs 1.9425 µs 1.9527 µs]
+Found 5 outliers among 100 measurements (5.00%)
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+
+Benchmarking dnt_check
+Benchmarking dnt_check: Warming up for 3.0000 s
+Benchmarking dnt_check: Collecting 100 samples in estimated 5.0003 s (56M iterations)
+Benchmarking dnt_check: Analyzing
+dnt_check               time:   [84.968 ns 85.115 ns 85.281 ns]
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+
+Benchmarking consent_check
+Benchmarking consent_check: Warming up for 3.0000 s
+Benchmarking consent_check: Collecting 100 samples in estimated 5.0348 s (621k iterations)
+Benchmarking consent_check: Analyzing
+consent_check           time:   [8.0382 µs 8.2460 µs 8.5470 µs]
+Found 18 outliers among 100 measurements (18.00%)
+  10 (10.00%) high mild
+  8 (8.00%) high severe
+
+Benchmarking event_serialization
+Benchmarking event_serialization: Warming up for 3.0000 s
+Benchmarking event_serialization: Collecting 100 samples in estimated 5.0031 s (6.0M iterations)
+Benchmarking event_serialization: Analyzing
+event_serialization     time:   [830.46 ns 838.85 ns 854.22 ns]
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+
+Benchmarking batch_processing/10
+Benchmarking batch_processing/10: Warming up for 3.0000 s
+Benchmarking batch_processing/10: Collecting 100 samples in estimated 6.4548 s (400 iterations)
+Benchmarking batch_processing/10: Analyzing
+batch_processing/10     time:   [15.582 ms 15.749 ms 15.948 ms]
+Found 10 outliers among 100 measurements (10.00%)
+  6 (6.00%) high mild
+  4 (4.00%) high severe
+Benchmarking batch_processing/50
+Benchmarking batch_processing/50: Warming up for 3.0000 s
+Benchmarking batch_processing/50: Collecting 100 samples in estimated 5.5342 s (200 iterations)
+Benchmarking batch_processing/50: Analyzing
+batch_processing/50     time:   [27.564 ms 27.840 ms 28.145 ms]
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking batch_processing/100
+Benchmarking batch_processing/100: Warming up for 3.0000 s
+Benchmarking batch_processing/100: Collecting 100 samples in estimated 8.2112 s (200 iterations)
+Benchmarking batch_processing/100: Analyzing
+batch_processing/100    time:   [41.819 ms 42.316 ms 42.880 ms]
+Found 7 outliers among 100 measurements (7.00%)
+  2 (2.00%) high mild
+  5 (5.00%) high severe
+Benchmarking batch_processing/500
+Benchmarking batch_processing/500: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 15.6s, or reduce sample count to 30.
+Benchmarking batch_processing/500: Collecting 100 samples in estimated 15.569 s (100 iterations)
+Benchmarking batch_processing/500: Analyzing
+batch_processing/500    time:   [167.00 ms 182.01 ms 200.76 ms]
+Found 13 outliers among 100 measurements (13.00%)
+  2 (2.00%) high mild
+  11 (11.00%) high severe
+
+Benchmarking storage_write/write_single_event
+Benchmarking storage_write/write_single_event: Warming up for 3.0000 s
+Benchmarking storage_write/write_single_event: Collecting 100 samples in estimated 11.350 s (30k iterations)
+Benchmarking storage_write/write_single_event: Analyzing
+storage_write/write_single_event
+                        time:   [337.90 µs 367.98 µs 403.54 µs]
+Found 13 outliers among 100 measurements (13.00%)
+  3 (3.00%) high mild
+  10 (10.00%) high severe
+
+Benchmarking builder_minimal
+Benchmarking builder_minimal: Warming up for 3.0000 s
+Benchmarking builder_minimal: Collecting 100 samples in estimated 5.1043 s (400 iterations)
+Benchmarking builder_minimal: Analyzing
+builder_minimal         time:   [12.488 ms 12.847 ms 13.305 ms]
+Found 4 outliers among 100 measurements (4.00%)
+  4 (4.00%) high severe
+
+Benchmarking builder_with_privacy
+Benchmarking builder_with_privacy: Warming up for 3.0000 s
+Benchmarking builder_with_privacy: Collecting 100 samples in estimated 6.1116 s (500 iterations)
+Benchmarking builder_with_privacy: Analyzing
+builder_with_privacy    time:   [11.983 ms 12.108 ms 12.263 ms]
+Found 8 outliers among 100 measurements (8.00%)
+  6 (6.00%) high mild
+  2 (2.00%) high severe
+

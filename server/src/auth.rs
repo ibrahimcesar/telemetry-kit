@@ -40,13 +40,6 @@ pub async fn verify_hmac(
         .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "Missing X-Timestamp header"))?
         .to_string();
 
-    let nonce = request
-        .headers()
-        .get("X-Nonce")
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "Missing X-Nonce header"))?
-        .to_string();
-
     // Extract body
     let (parts, body) = request.into_parts();
     let body_bytes = axum::body::to_bytes(body, usize::MAX)
@@ -64,7 +57,10 @@ pub async fn verify_hmac(
         .and_then(|s| s.strip_prefix("Bearer "));
 
     let token_str = auth_header.ok_or_else(|| {
-        error_response(StatusCode::UNAUTHORIZED, "Missing or invalid Authorization header")
+        error_response(
+            StatusCode::UNAUTHORIZED,
+            "Missing or invalid Authorization header",
+        )
     })?;
 
     // Fetch token from database
@@ -78,7 +74,7 @@ pub async fn verify_hmac(
     .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "Invalid token"))?;
 
     // Verify HMAC signature
-    let message = format!("{}:{}:{}", timestamp, nonce, body_str);
+    let message = format!("{}:{}", timestamp, body_str);
     let is_valid = verify_signature(&message, &signature, &token.secret);
 
     if !is_valid {
@@ -89,9 +85,9 @@ pub async fn verify_hmac(
     }
 
     // Validate timestamp (within ±10 minutes)
-    let request_time = timestamp.parse::<i64>().map_err(|_| {
-        error_response(StatusCode::BAD_REQUEST, "Invalid timestamp format")
-    })?;
+    let request_time = timestamp
+        .parse::<i64>()
+        .map_err(|_| error_response(StatusCode::BAD_REQUEST, "Invalid timestamp format"))?;
 
     let now = Utc::now().timestamp();
     let time_diff = (now - request_time).abs();
@@ -102,29 +98,6 @@ pub async fn verify_hmac(
             "Timestamp outside acceptable window",
         ));
     }
-
-    // Check nonce for replay attacks
-    let nonce_key = format!("nonce:{}", nonce);
-    let nonce_exists: bool = state
-        .redis
-        .get(&nonce_key)
-        .await
-        .map_err(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR, "Redis error"))?
-        .unwrap_or(false);
-
-    if nonce_exists {
-        return Err(error_response(
-            StatusCode::CONFLICT,
-            "Duplicate nonce detected",
-        ));
-    }
-
-    // Store nonce with 10-minute TTL
-    state
-        .redis
-        .set_ex(&nonce_key, true, 600)
-        .await
-        .map_err(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR, "Redis error"))?;
 
     // Update last_used_at
     sqlx::query("UPDATE api_tokens SET last_used_at = NOW() WHERE id = $1")
@@ -186,7 +159,7 @@ mod tests {
     #[test]
     fn test_verify_signature_valid() {
         let secret = "test_secret";
-        let message = "1234567890:nonce123:body";
+        let message = "1234567890:body";
 
         // Generate a valid signature
         let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
@@ -200,7 +173,7 @@ mod tests {
     #[test]
     fn test_verify_signature_invalid() {
         let secret = "test_secret";
-        let message = "1234567890:nonce123:body";
+        let message = "1234567890:body";
         let wrong_signature = "invalid_signature";
 
         assert!(!verify_signature(message, wrong_signature, secret));
@@ -210,7 +183,7 @@ mod tests {
     fn test_verify_signature_wrong_secret() {
         let secret = "test_secret";
         let wrong_secret = "wrong_secret";
-        let message = "1234567890:nonce123:body";
+        let message = "1234567890:body";
 
         // Generate signature with correct secret
         let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
@@ -244,13 +217,15 @@ mod tests {
 
     #[test]
     fn test_hmac_message_format() {
-        // Verify the message format matches the spec: "timestamp:nonce:body"
+        // Verify the message format matches the spec: "timestamp:body"
         let timestamp = "1234567890";
-        let nonce = "550e8400-e29b-41d4-a716-446655440000";
         let body = r#"{"events":[{"event_id":"..."}]}"#;
 
-        let message = format!("{}:{}:{}", timestamp, nonce, body);
+        let message = format!("{}:{}", timestamp, body);
 
-        assert_eq!(message, format!("1234567890:550e8400-e29b-41d4-a716-446655440000:{}", body));
+        assert_eq!(
+            message,
+            format!("1234567890:{}", body)
+        );
     }
 }

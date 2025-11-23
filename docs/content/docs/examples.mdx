@@ -1,0 +1,478 @@
+---
+title: Examples
+description: Real-world examples and code snippets for telemetry-kit
+icon: Code2
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Basic Usage
+
+### Local-Only Tracking
+
+Track events without sync:
+
+```rust
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .build()?;
+
+    telemetry.track_command("process", |event| {
+        event.success(true).duration_ms(100)
+    }).await?;
+
+    Ok(())
+}
+```
+
+### With Auto-Sync
+
+Enable automatic synchronization:
+
+```rust
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .with_sync_credentials(
+            env::var("TELEMETRY_ORG_ID")?,
+            env::var("TELEMETRY_APP_ID")?,
+            env::var("TELEMETRY_TOKEN")?,
+            env::var("TELEMETRY_SECRET")?,
+        )?
+        .auto_sync(true)
+        .sync_interval(30)
+        .build()?;
+
+    telemetry.track_command("build", |event| {
+        event.flag("--release").success(true)
+    }).await?;
+
+    telemetry.shutdown().await?;
+    Ok(())
+}
+```
+
+## CLI Applications
+
+### Basic CLI Tool
+
+```rust
+use clap::Parser;
+use telemetry_kit::prelude::*;
+
+#[derive(Parser)]
+struct Cli {
+    #[arg(long)]
+    output: Option<String>,
+
+    #[arg(short, long)]
+    verbose: bool,
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-cli")?
+        .service_version(env!("CARGO_PKG_VERSION"))
+        .build()?;
+
+    let start = std::time::Instant::now();
+
+    // Your CLI logic here
+    process(&cli)?;
+
+    let duration = start.elapsed().as_millis() as u64;
+
+    telemetry.track_command("run", |event| {
+        event
+            .flag_if(cli.verbose, "--verbose")
+            .flag_if(cli.output.is_some(), "--output")
+            .duration_ms(duration)
+            .success(true)
+    }).await?;
+
+    Ok(())
+}
+
+fn process(cli: &Cli) -> Result<()> {
+    // Implementation
+    Ok(())
+}
+```
+
+### With Subcommands
+
+```rust
+use clap::{Parser, Subcommand};
+use telemetry_kit::prelude::*;
+
+#[derive(Parser)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    Build { #[arg(long)] release: bool },
+    Test { #[arg(long)] coverage: bool },
+    Deploy { target: String },
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-cli")?
+        .build()?;
+
+    let result = match cli.command {
+        Commands::Build { release } => {
+            let start = std::time::Instant::now();
+            let result = build(release);
+            let duration = start.elapsed().as_millis() as u64;
+
+            telemetry.track_command("build", |event| {
+                event
+                    .flag_if(release, "--release")
+                    .duration_ms(duration)
+                    .success(result.is_ok())
+                    .exit_code_if(result.is_err(), 1)
+            }).await?;
+
+            result
+        }
+        Commands::Test { coverage } => {
+            telemetry.track_command("test", |event| {
+                event.flag_if(coverage, "--coverage")
+            }).await?;
+
+            run_tests(coverage)
+        }
+        Commands::Deploy { target } => {
+            telemetry.track_command("deploy", |event| {
+                event.arg(&target)
+            }).await?;
+
+            deploy(&target)
+        }
+    };
+
+    Ok(())
+}
+```
+
+## Long-Running Services
+
+### Background Service
+
+```rust
+use telemetry_kit::prelude::*;
+use tokio::signal;
+use tokio::time::{interval, Duration};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-service")?
+        .with_sync_credentials(/* ... */)?
+        .sync_interval(60)
+        .build()?;
+
+    // Track service start
+    telemetry.track_feature("service", |event| {
+        event.method("start").success(true)
+    }).await?;
+
+    // Main service loop
+    let mut ticker = interval(Duration::from_secs(10));
+    loop {
+        tokio::select! {
+            _ = ticker.tick() => {
+                let result = process_batch().await;
+
+                telemetry.track_feature("batch_processing", |event| {
+                    event.success(result.is_ok())
+                }).await?;
+            }
+            _ = signal::ctrl_c() => {
+                break;
+            }
+        }
+    }
+
+    // Track service stop
+    telemetry.track_feature("service", |event| {
+        event.method("stop").success(true)
+    }).await?;
+
+    telemetry.shutdown().await?;
+    Ok(())
+}
+
+async fn process_batch() -> Result<()> {
+    // Implementation
+    Ok(())
+}
+```
+
+## Feature Tracking
+
+### API Usage
+
+```rust
+async fn authenticate(
+    method: &str,
+    telemetry: &TelemetryKit,
+) -> Result<User> {
+    let start = std::time::Instant::now();
+    let result = perform_auth(method).await;
+    let duration = start.elapsed().as_millis() as u64;
+
+    telemetry.track_feature("authentication", |event| {
+        event
+            .method(method)
+            .success(result.is_ok())
+            .metadata("duration_ms", &duration.to_string())
+    }).await?;
+
+    result
+}
+```
+
+### Library Methods
+
+```rust
+pub struct MyLibrary {
+    telemetry: TelemetryKit,
+}
+
+impl MyLibrary {
+    pub async fn process(&self, data: &Data) -> Result<Output> {
+        let result = self.do_process(data).await;
+
+        self.telemetry.track_feature("process", |event| {
+            event
+                .method("standard")
+                .success(result.is_ok())
+                .metadata("data_size", &data.len().to_string())
+        }).await?;
+
+        result
+    }
+
+    async fn do_process(&self, data: &Data) -> Result<Output> {
+        // Implementation
+        todo!()
+    }
+}
+```
+
+## Error Handling
+
+### Tracking Errors
+
+```rust
+async fn risky_operation(telemetry: &TelemetryKit) -> Result<()> {
+    match perform_operation().await {
+        Ok(result) => {
+            telemetry.track_custom("operation", json!({
+                "status": "success",
+                "result": result
+            })).await?;
+
+            Ok(())
+        }
+        Err(e) => {
+            telemetry.track_custom("operation", json!({
+                "status": "error",
+                "error_type": e.to_string(),
+                "recoverable": is_recoverable(&e)
+            })).await?;
+
+            Err(e)
+        }
+    }
+}
+```
+
+## Advanced Patterns
+
+### Conditional Telemetry
+
+```rust
+struct AppConfig {
+    telemetry_enabled: bool,
+    telemetry_org_id: String,
+    // ...
+}
+
+async fn init_telemetry(config: &AppConfig) -> Result<Option<TelemetryKit>> {
+    if !config.telemetry_enabled {
+        return Ok(None);
+    }
+
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .with_sync_credentials(
+            &config.telemetry_org_id,
+            &config.telemetry_app_id,
+            &config.telemetry_token,
+            &config.telemetry_secret,
+        )?
+        .build()?;
+
+    Ok(Some(telemetry))
+}
+
+async fn track_if_enabled(
+    telemetry: &Option<TelemetryKit>,
+    event_type: &str,
+) -> Result<()> {
+    if let Some(t) = telemetry {
+        t.track_custom(event_type, json!({})).await?;
+    }
+    Ok(())
+}
+```
+
+### Sampling
+
+```rust
+use rand::Rng;
+
+async fn track_with_sampling(
+    telemetry: &TelemetryKit,
+    sample_rate: f64,
+) -> Result<()> {
+    let mut rng = rand::thread_rng();
+
+    if rng.gen::<f64>() < sample_rate {
+        telemetry.track_custom("sampled_event", json!({})).await?;
+    }
+
+    Ok(())
+}
+```
+
+### Batching Events
+
+```rust
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+struct EventBuffer {
+    telemetry: TelemetryKit,
+    buffer: Arc<Mutex<Vec<String>>>,
+    max_size: usize,
+}
+
+impl EventBuffer {
+    async fn track(&self, event_type: String) -> Result<()> {
+        let mut buffer = self.buffer.lock().await;
+        buffer.push(event_type);
+
+        if buffer.len() >= self.max_size {
+            self.flush_buffer(&mut buffer).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn flush_buffer(&self, buffer: &mut Vec<String>) -> Result<()> {
+        for event in buffer.drain(..) {
+            self.telemetry.track_custom(&event, json!({})).await?;
+        }
+        Ok(())
+    }
+}
+```
+
+## Testing
+
+### Unit Tests
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_with_telemetry() {
+        let telemetry = TelemetryKit::builder()
+            .service_name("test-app")
+            .unwrap()
+            .build()
+            .unwrap();
+
+        let result = telemetry.track_command("test", |event| {
+            event.success(true)
+        }).await;
+
+        assert!(result.is_ok());
+
+        let stats = telemetry.stats().await.unwrap();
+        assert_eq!(stats.total_events, 1);
+    }
+}
+```
+
+### Integration Tests
+
+```rust
+#[tokio::test]
+async fn test_sync() {
+    let telemetry = TelemetryKit::builder()
+        .service_name("test-sync")
+        .unwrap()
+        .with_sync_credentials(
+            "test-org",
+            "test-app",
+            "test-token",
+            "test-secret"
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+
+    telemetry.track_command("test", |event| {
+        event.success(true)
+    }).await.unwrap();
+
+    // Note: This will fail without a running server
+    // Use wiremock or similar for mocking
+}
+```
+
+## Running Examples
+
+The repository includes several working examples:
+
+```bash
+# Basic local-only tracking
+cargo run --example basic
+
+# Auto-sync demonstration
+cargo run --example auto_sync --features sync
+
+# End-to-end sync test (requires server)
+cargo run --example e2e_sync_test --features sync
+```
+
+## See Also
+
+- [Getting Started](/docs) - Initial setup
+- [Auto-Sync](/docs/auto-sync) - Background synchronization
+- [CLI Tool](/docs/cli) - Command-line interface
+- [API Reference](/docs/api) - Complete API documentation
+- [GitHub Examples](https://github.com/ibrahimcesar/telemetry-kit/tree/main/examples) - Source code
