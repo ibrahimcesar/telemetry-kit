@@ -1,7 +1,7 @@
-import type { BaseLayoutProps } from 'fumadocs-ui/layout';
+import type { DocsLayoutProps } from 'fumadocs-ui/layout';
 import Image from 'next/image';
 
-export const baseOptions: BaseLayoutProps = {
+export const baseOptions: Omit<DocsLayoutProps, 'tree'> = {
   nav: {
     title: (
       <div className="flex items-center gap-2">

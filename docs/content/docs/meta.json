@@ -2,14 +2,21 @@
   "title": "Documentation",
   "pages": [
     "index",
+    "quick-start",
+    "---Core Features---",
     "auto-sync",
     "cli",
     "---API Reference---",
     "api",
     "error-handling",
     "---Guides---",
+    "best-practices",
     "self-hosting",
+    "---Privacy & Compliance---",
     "privacy",
+    "privacy-compliance",
+    "advanced-privacy",
+    "---Examples---",
     "examples"
   ]
 }

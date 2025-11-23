@@ -329,9 +329,607 @@ docker compose exec api psql $DATABASE_URL
 docker compose logs postgres
 ```
 
+## Production Best Practices
+
+### Database Optimization
+
+#### Connection Pooling
+
+Configure connection pool in your server:
+
+```rust
+// Example configuration
+use sqlx::postgres::PgPoolOptions;
+
+let pool = PgPoolOptions::new()
+    .max_connections(20)           // Adjust based on load
+    .min_connections(5)
+    .acquire_timeout(Duration::from_secs(3))
+    .idle_timeout(Duration::from_secs(600))
+    .connect(&database_url)
+    .await?;
+```
+
+#### Indexing Strategy
+
+Add indexes for common queries:
+
+```sql
+-- Performance indexes
+CREATE INDEX CONCURRENTLY idx_events_org_timestamp
+    ON events(org_id, timestamp DESC);
+
+CREATE INDEX CONCURRENTLY idx_events_app_timestamp
+    ON events(app_id, timestamp DESC);
+
+CREATE INDEX CONCURRENTLY idx_events_category
+    ON events(event_category)
+    WHERE event_category IS NOT NULL;
+
+-- JSONB indexes for event_data queries
+CREATE INDEX CONCURRENTLY idx_events_data_gin
+    ON events USING GIN (event_data);
+
+-- Analyze tables
+ANALYZE events;
+ANALYZE organizations;
+ANALYZE applications;
+```
+
+#### Partitioning
+
+For high-volume deployments, partition by time:
+
+```sql
+-- Create partitioned table
+CREATE TABLE events_partitioned (
+    LIKE events INCLUDING ALL
+) PARTITION BY RANGE (timestamp);
+
+-- Create monthly partitions
+CREATE TABLE events_2025_01 PARTITION OF events_partitioned
+    FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
+
+CREATE TABLE events_2025_02 PARTITION OF events_partitioned
+    FOR VALUES FROM ('2025-02-01') TO ('2025-03-01');
+
+-- Automate partition creation with pg_cron or external scripts
+```
+
+#### Query Optimization
+
+```sql
+-- Vacuum regularly
+VACUUM ANALYZE events;
+
+-- Update statistics
+ANALYZE events;
+
+-- Monitor slow queries
+SELECT
+    query,
+    calls,
+    total_time,
+    mean_time,
+    max_time
+FROM pg_stat_statements
+ORDER BY mean_time DESC
+LIMIT 10;
+```
+
+### Security Hardening
+
+#### TLS/SSL Configuration
+
+Use TLS for database connections:
+
+```bash
+# In .env
+DATABASE_URL=postgresql://user:pass@host:5432/db?sslmode=require
+
+# For self-signed certificates
+DATABASE_URL=postgresql://user:pass@host:5432/db?sslmode=verify-full&sslrootcert=/path/to/ca.crt
+```
+
+#### API Rate Limiting
+
+Implement rate limiting with Tower middleware:
+
+```rust
+use tower::ServiceBuilder;
+use tower_http::limit::RateLimitLayer;
+
+let app = Router::new()
+    .route("/events/batch", post(handle_batch))
+    .layer(
+        ServiceBuilder::new()
+            .layer(RateLimitLayer::new(
+                100,                              // 100 requests
+                Duration::from_secs(60)           // per minute
+            ))
+    );
+```
+
+#### IP Allowlisting
+
+Restrict access to known IPs:
+
+```nginx
+# nginx
+geo $allowed_ip {
+    default 0;
+    10.0.0.0/8 1;        # Your VPC
+    192.168.1.0/24 1;    # Office network
+}
+
+server {
+    if ($allowed_ip = 0) {
+        return 403;
+    }
+    # ... rest of config
+}
+```
+
+#### CORS Configuration
+
+Configure CORS appropriately:
+
+```rust
+use tower_http::cors::{CorsLayer, Any};
+
+let cors = CorsLayer::new()
+    .allow_origin("https://yourdomain.com".parse::<HeaderValue>().unwrap())
+    .allow_methods([Method::POST, Method::GET])
+    .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]);
+
+let app = Router::new()
+    .route("/events/batch", post(handle_batch))
+    .layer(cors);
+```
+
+### Monitoring & Observability
+
+#### Structured Logging
+
+```rust
+use tracing::{info, error, instrument};
+use tracing_subscriber;
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt()
+        .with_target(false)
+        .with_level(true)
+        .json()  // JSON logs for parsing
+        .init();
+
+    info!("Server starting");
+}
+
+#[instrument(skip(pool))]
+async fn handle_batch(
+    State(pool): State<PgPool>,
+    Json(events): Json<Vec<Event>>,
+) -> Result<Json<BatchResponse>, StatusCode> {
+    info!(event_count = events.len(), "Processing batch");
+    // ...
+}
+```
+
+#### Prometheus Metrics
+
+Add metrics endpoint:
+
+```rust
+use axum_prometheus::PrometheusMetricLayer;
+
+let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
+
+let app = Router::new()
+    .route("/events/batch", post(handle_batch))
+    .route("/metrics", get(|| async move { metric_handle.render() }))
+    .layer(prometheus_layer);
+```
+
+Monitor these metrics:
+- `http_requests_total` - Total requests
+- `http_request_duration_seconds` - Request latency
+- `db_connections_active` - Active connections
+- `events_ingested_total` - Events processed
+- `events_failed_total` - Failed events
+
+#### Grafana Dashboard
+
+Example queries:
+
+```promql
+# Request rate
+rate(http_requests_total[5m])
+
+# Error rate
+rate(http_requests_total{status=~"5.."}[5m])
+
+# P95 latency
+histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+# Event ingestion rate
+rate(events_ingested_total[5m])
+```
+
+### High Availability
+
+#### Multi-Region Deployment
+
+```yaml
+# docker-compose.prod.yml
+version: '3.8'
+
+services:
+  api-1:
+    build: .
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      INSTANCE_ID: api-1
+
+  postgres-primary:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: telemetry
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata-primary:/var/lib/postgresql/data
+    command: |
+      postgres
+      -c wal_level=replica
+      -c max_wal_senders=3
+      -c max_replication_slots=3
+
+  postgres-replica:
+    image: postgres:16
+    environment:
+      PGUSER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata-replica:/var/lib/postgresql/data
+    command: |
+      bash -c "
+      until pg_basebackup --pgdata=/var/lib/postgresql/data -R --slot=replication_slot --host=postgres-primary --port=5432
+      do
+        echo 'Waiting for primary to connect...'
+        sleep 1s
+      done
+      postgres
+      "
+
+  loadbalancer:
+    image: nginx:alpine
+    ports:
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - api-1
+
+volumes:
+  pgdata-primary:
+  pgdata-replica:
+```
+
+#### Load Balancer Configuration
+
+```nginx
+# nginx.conf
+upstream api_servers {
+    least_conn;
+    server api-1:3000 max_fails=3 fail_timeout=30s;
+    server api-2:3000 max_fails=3 fail_timeout=30s;
+    server api-3:3000 max_fails=3 fail_timeout=30s;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name telemetry.example.com;
+
+    ssl_certificate /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # Health check endpoint
+    location /health {
+        access_log off;
+        proxy_pass http://api_servers;
+        proxy_next_upstream error timeout http_500 http_502 http_503;
+    }
+
+    location / {
+        proxy_pass http://api_servers;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeouts
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+
+        # Retry failed requests
+        proxy_next_upstream error timeout http_500 http_502 http_503;
+        proxy_next_upstream_tries 3;
+    }
+}
+```
+
+### Data Retention & Archival
+
+#### Automated Cleanup
+
+Create a cleanup job:
+
+```sql
+-- Archive old events to cold storage
+CREATE TABLE events_archive (
+    LIKE events INCLUDING ALL
+);
+
+-- Function to archive and delete old events
+CREATE OR REPLACE FUNCTION archive_old_events(days_to_keep INTEGER)
+RETURNS INTEGER AS $$
+DECLARE
+    archived_count INTEGER;
+BEGIN
+    -- Archive to cold storage
+    WITH archived AS (
+        INSERT INTO events_archive
+        SELECT * FROM events
+        WHERE timestamp < NOW() - (days_to_keep || ' days')::INTERVAL
+        RETURNING *
+    )
+    SELECT COUNT(*) INTO archived_count FROM archived;
+
+    -- Delete archived events
+    DELETE FROM events
+    WHERE timestamp < NOW() - (days_to_keep || ' days')::INTERVAL;
+
+    RETURN archived_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Schedule with pg_cron (requires pg_cron extension)
+SELECT cron.schedule('cleanup-old-events', '0 2 * * *',
+    'SELECT archive_old_events(90)');
+```
+
+#### Export to S3
+
+```bash
+#!/bin/bash
+# export-to-s3.sh
+
+# Export events older than 90 days
+docker compose exec -T postgres psql -U telemetry -d telemetry -c "
+    COPY (
+        SELECT * FROM events
+        WHERE timestamp < NOW() - INTERVAL '90 days'
+    ) TO STDOUT WITH CSV HEADER
+" | gzip | aws s3 cp - "s3://telemetry-archive/events-$(date +%Y%m%d).csv.gz"
+
+# Delete exported events
+docker compose exec -T postgres psql -U telemetry -d telemetry -c "
+    DELETE FROM events
+    WHERE timestamp < NOW() - INTERVAL '90 days'
+"
+```
+
+### Disaster Recovery
+
+#### Backup Strategy
+
+**3-2-1 Rule:** 3 copies, 2 different media, 1 offsite
+
+```bash
+#!/bin/bash
+# backup.sh - Daily backup script
+
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/backups"
+S3_BUCKET="s3://telemetry-backups"
+
+# 1. PostgreSQL dump
+docker compose exec -T postgres pg_dump -U telemetry telemetry | gzip > "$BACKUP_DIR/db-$DATE.sql.gz"
+
+# 2. Copy to S3
+aws s3 cp "$BACKUP_DIR/db-$DATE.sql.gz" "$S3_BUCKET/"
+
+# 3. Keep local backups for 7 days
+find $BACKUP_DIR -name "db-*.sql.gz" -mtime +7 -delete
+
+# 4. Verify backup integrity
+gunzip -t "$BACKUP_DIR/db-$DATE.sql.gz" && echo "✓ Backup verified"
+```
+
+#### Point-in-Time Recovery
+
+Enable WAL archiving:
+
+```yaml
+# docker-compose.yml
+postgres:
+  image: postgres:16
+  environment:
+    POSTGRES_DB: telemetry
+    POSTGRES_USER: telemetry
+    POSTGRES_PASSWORD: password
+  volumes:
+    - postgres_data:/var/lib/postgresql/data
+    - ./wal_archive:/var/lib/postgresql/wal_archive
+  command: |
+    postgres
+    -c wal_level=replica
+    -c archive_mode=on
+    -c archive_command='test ! -f /var/lib/postgresql/wal_archive/%f && cp %p /var/lib/postgresql/wal_archive/%f'
+    -c max_wal_senders=3
+```
+
+### Performance Tuning
+
+#### PostgreSQL Configuration
+
+```ini
+# postgresql.conf optimizations
+
+# Memory
+shared_buffers = 256MB              # 25% of RAM
+effective_cache_size = 1GB          # 50-75% of RAM
+maintenance_work_mem = 64MB
+work_mem = 16MB
+
+# Checkpoints
+checkpoint_completion_target = 0.9
+wal_buffers = 16MB
+max_wal_size = 1GB
+min_wal_size = 80MB
+
+# Query planner
+random_page_cost = 1.1              # For SSD
+effective_io_concurrency = 200      # For SSD
+
+# Connections
+max_connections = 100
+```
+
+#### Batch Size Optimization
+
+```rust
+// Process events in optimal batch sizes
+const OPTIMAL_BATCH_SIZE: usize = 500;
+
+async fn handle_batch(
+    State(pool): State<PgPool>,
+    Json(events): Json<Vec<Event>>,
+) -> Result<Json<BatchResponse>, StatusCode> {
+    let mut total_inserted = 0;
+
+    // Process in chunks
+    for chunk in events.chunks(OPTIMAL_BATCH_SIZE) {
+        let inserted = insert_events(&pool, chunk).await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        total_inserted += inserted;
+    }
+
+    Ok(Json(BatchResponse {
+        accepted: total_inserted,
+        rejected: events.len() - total_inserted,
+    }))
+}
+```
+
+### Operational Playbooks
+
+#### Incident Response
+
+**High Latency:**
+1. Check database connections: `SELECT count(*) FROM pg_stat_activity;`
+2. Check slow queries: `SELECT * FROM pg_stat_activity WHERE state != 'idle' AND query_start < NOW() - INTERVAL '1 minute';`
+3. Check disk I/O: `iostat -x 1`
+4. Scale horizontally if needed
+
+**Database Full:**
+1. Check disk space: `df -h`
+2. Archive old events: `SELECT archive_old_events(30);`
+3. Vacuum full: `VACUUM FULL events;`
+4. Increase disk if needed
+
+**High Memory Usage:**
+1. Check connections: Reduce `max_connections`
+2. Tune `shared_buffers` and `work_mem`
+3. Restart PostgreSQL: `docker compose restart postgres`
+
+#### Runbook: Deploy New Version
+
+```bash
+#!/bin/bash
+# deploy.sh - Zero-downtime deployment
+
+# 1. Pull latest code
+git pull origin main
+
+# 2. Build new image
+docker compose build api
+
+# 3. Run database migrations
+docker compose exec postgres psql -U telemetry -d telemetry -f /migrations/new_migration.sql
+
+# 4. Rolling restart
+for i in {1..3}; do
+    docker compose up -d --no-deps --scale api=$i api
+    sleep 30  # Wait for health checks
+done
+
+# 5. Verify
+curl -f https://telemetry.example.com/health || { echo "Health check failed"; exit 1; }
+
+echo "✓ Deployment successful"
+```
+
+### Cost Optimization
+
+#### Database Storage
+
+```sql
+-- Compress old JSONB data
+UPDATE events
+SET event_data = jsonb_strip_nulls(event_data)
+WHERE timestamp < NOW() - INTERVAL '30 days';
+
+-- Remove unused columns from archive
+CREATE TABLE events_archive_compressed AS
+SELECT event_id, org_id, app_id, event_type, timestamp
+FROM events_archive;
+
+DROP TABLE events_archive;
+ALTER TABLE events_archive_compressed RENAME TO events_archive;
+```
+
+#### Caching Strategy
+
+```rust
+use moka::future::Cache;
+
+// Cache aggregated results
+let cache: Cache<String, QueryResult> = Cache::builder()
+    .max_capacity(10_000)
+    .time_to_live(Duration::from_secs(3600))  // 1 hour
+    .build();
+
+async fn get_aggregated_stats(
+    org_id: &str,
+    cache: &Cache<String, QueryResult>,
+    pool: &PgPool,
+) -> Result<QueryResult> {
+    let cache_key = format!("stats:{}", org_id);
+
+    cache.try_get_with(cache_key, async {
+        // Expensive database query
+        query_database(pool, org_id).await
+    }).await
+}
+```
+
 ## See Also
 
 - [API Reference](/docs/api) - Complete API documentation
 - [Getting Started](/docs) - Client setup
 - [Auto-Sync](/docs/auto-sync) - Configure automatic sync
+- [Best Practices](/docs/best-practices) - Development patterns
+- [Privacy Compliance](/docs/privacy-compliance) - GDPR/CCPA guide
 - [GitHub](https://github.com/ibrahimcesar/telemetry-kit/tree/main/server) - Server source code

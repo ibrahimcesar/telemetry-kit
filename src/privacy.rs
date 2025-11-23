@@ -249,6 +249,113 @@ impl PrivacyManager {
             }
         }
     }
+
+    /// Prompt user for consent interactively
+    ///
+    /// This displays a user-friendly prompt explaining what telemetry is collected
+    /// and asks for the user's consent. Returns true if consent was granted.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use telemetry_kit::privacy::{PrivacyConfig, PrivacyManager};
+    ///
+    /// let config = PrivacyConfig::default();
+    /// let manager = PrivacyManager::new(config, "my-app").unwrap();
+    ///
+    /// if manager.prompt_for_consent("my-app", "1.0.0").unwrap() {
+    ///     println!("User granted consent");
+    /// }
+    /// ```
+    #[cfg(feature = "cli")]
+    pub fn prompt_for_consent(&self, service_name: &str, version: &str) -> Result<bool> {
+        use dialoguer::{theme::ColorfulTheme, Confirm};
+
+        // Check if consent was already given
+        let current_consent = self.load_consent()?;
+        if current_consent.status != ConsentStatus::Unknown {
+            // Already have a consent decision
+            return Ok(current_consent.status == ConsentStatus::Granted);
+        }
+
+        println!("\n{} Privacy & Telemetry Consent", "📊".to_string());
+        println!("{}", "─".repeat(50));
+        println!();
+        println!("{} {} v{}", "Application:", service_name, version);
+        println!();
+        println!("This application collects anonymous usage telemetry to help");
+        println!("improve the software. The following information is collected:");
+        println!();
+        println!("  • Command usage (which features you use)");
+        println!("  • Success/failure of operations");
+        println!("  • Performance metrics (duration, not content)");
+        println!("  • Operating system and architecture");
+        println!();
+        println!("{}", "Privacy Guarantees:".to_string());
+        println!("  ✓ No personal information (PII) is collected");
+        println!("  ✓ User IDs are anonymized (SHA-256 hashed)");
+        println!("  ✓ File paths are sanitized (usernames removed)");
+        println!("  ✓ Email addresses are hashed if detected");
+        println!("  ✓ You can opt out anytime with DO_NOT_TRACK=1");
+        println!();
+        println!("You can manage consent later with:");
+        println!("  telemetry-kit consent grant   # Enable telemetry");
+        println!("  telemetry-kit consent deny    # Disable telemetry");
+        println!("  telemetry-kit consent status  # Check current status");
+        println!();
+
+        let consent = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Allow anonymous telemetry collection?")
+            .default(false) // Default to NO for privacy
+            .interact()
+            .map_err(|e| TelemetryError::Other(format!("Failed to get user input: {}", e)))?;
+
+        if consent {
+            self.grant_consent(service_name)?;
+            println!();
+            println!("{} Thank you! Telemetry enabled.", "✓".to_string());
+        } else {
+            self.deny_consent(service_name)?;
+            println!();
+            println!("{} Telemetry disabled. You can change this anytime.", "✓".to_string());
+        }
+        println!();
+
+        Ok(consent)
+    }
+
+    /// Prompt for consent with a minimal message (one-liner)
+    ///
+    /// This is a shorter version of `prompt_for_consent` for applications
+    /// that want a less verbose consent prompt.
+    #[cfg(feature = "cli")]
+    pub fn prompt_minimal(&self, service_name: &str) -> Result<bool> {
+        use dialoguer::{theme::ColorfulTheme, Confirm};
+
+        // Check if consent was already given
+        let current_consent = self.load_consent()?;
+        if current_consent.status != ConsentStatus::Unknown {
+            return Ok(current_consent.status == ConsentStatus::Granted);
+        }
+
+        println!();
+        let consent = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!(
+                "{} Enable anonymous telemetry? (improves {}, respects privacy)",
+                "📊", service_name
+            ))
+            .default(false)
+            .interact()
+            .map_err(|e| TelemetryError::Other(format!("Failed to get user input: {}", e)))?;
+
+        if consent {
+            self.grant_consent(service_name)?;
+        } else {
+            self.deny_consent(service_name)?;
+        }
+
+        Ok(consent)
+    }
 }
 
 #[cfg(test)]

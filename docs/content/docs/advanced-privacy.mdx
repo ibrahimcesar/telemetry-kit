@@ -1,0 +1,930 @@
+---
+title: Advanced Privacy Features
+description: Differential privacy, zero-knowledge analytics, and encrypted user segments for maximum privacy protection
+icon: ShieldCheck
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+## Overview
+
+telemetry-kit v0.4.0+ includes cutting-edge privacy technologies that protect user data even when publishing aggregated analytics. These features go beyond basic anonymization to provide **mathematically provable privacy guarantees**.
+
+<Callout type="warn">
+These features are planned for v0.4.0 (Q2 2025) and are not yet implemented. This documentation serves as a design specification and preview.
+</Callout>
+
+**Advanced Privacy Technologies:**
+
+- **Differential Privacy** - Add calibrated noise to aggregations to prevent individual identification
+- **Zero-Knowledge Analytics** - Analyze trends without accessing individual event data
+- **Encrypted User Segments** - Group users while keeping identities encrypted end-to-end
+
+## Differential Privacy for Aggregations
+
+### What Is Differential Privacy?
+
+Differential privacy is a **mathematical framework** that protects individual privacy in aggregate data by adding carefully calibrated noise. It provides a **provable guarantee** that no one can determine if a specific individual's data was included in a dataset.
+
+### The Problem
+
+Consider this scenario:
+
+```rust
+// Your analytics dashboard shows:
+Feature A: 10,000 users
+Feature B: 8,500 users
+Feature C: 1 user  // ⚠️ Privacy leak!
+```
+
+If someone knows Alice is your only user interested in Feature C, they can deduce that **Alice used Feature C** just by looking at the aggregate count.
+
+### The Solution
+
+Differential privacy adds **Laplace noise** to each count:
+
+```rust
+// With differential privacy (epsilon = 0.1):
+Feature A: 10,003 users  // Real: 10,000 + noise: +3
+Feature B: 8,497 users   // Real: 8,500 + noise: -3
+Feature C: 4 users       // Real: 1 + noise: +3 ✅ Privacy protected!
+```
+
+Now it's impossible to tell if Alice actually used Feature C or if the count is purely noise.
+
+### API Design (v0.4.0)
+
+<Tabs items={['Basic Usage', 'Custom Epsilon', 'Server-Side']}>
+<Tab value="Basic Usage">
+
+```rust
+use telemetry_kit::prelude::*;
+use telemetry_kit::analytics::DifferentialPrivacy;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .with_differential_privacy(true)  // Enable DP
+        .build()?;
+
+    // Query analytics with differential privacy
+    let stats = telemetry
+        .analytics()
+        .feature_usage()
+        .with_differential_privacy()  // Apply DP to results
+        .query()
+        .await?;
+
+    for (feature, count) in stats {
+        println!("{}: {} users", feature, count);
+        // Counts are noised for privacy
+    }
+
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Custom Epsilon">
+
+```rust
+use telemetry_kit::analytics::DifferentialPrivacy;
+
+// Lower epsilon = more privacy, less accuracy
+let dp = DifferentialPrivacy::new()
+    .epsilon(0.1)      // Very private (lots of noise)
+    .sensitivity(1.0)  // Each user contributes max 1 to any count
+    .build()?;
+
+let stats = telemetry
+    .analytics()
+    .feature_usage()
+    .with_dp(dp)  // Custom DP parameters
+    .query()
+    .await?;
+
+// Epsilon guidelines:
+// 0.01 - Maximum privacy (high noise)
+// 0.1  - Strong privacy (moderate noise)
+// 1.0  - Balanced privacy/accuracy
+// 10.0 - Minimal privacy (low noise)
+```
+
+</Tab>
+<Tab value="Server-Side">
+
+```rust
+// Server applies DP when serving analytics
+use telemetry_kit_server::analytics::DPConfig;
+
+let server = AnalyticsServer::builder()
+    .differential_privacy(DPConfig {
+        enabled: true,
+        epsilon: 0.1,
+        delta: 1e-5,  // Probability of privacy failure
+        sensitivity: 1.0,
+    })
+    .build()?;
+
+// All analytics queries are automatically noised
+server.serve("127.0.0.1:8080").await?;
+```
+
+</Tab>
+</Tabs>
+
+### How It Works
+
+<Steps>
+<Step>
+
+### Compute True Aggregate
+
+```rust
+let true_count = database
+    .query("SELECT COUNT(*) FROM events WHERE feature = 'login'")
+    .await?;
+// Result: 1
+```
+
+</Step>
+
+<Step>
+
+### Generate Laplace Noise
+
+```rust
+use rand_distr::{Distribution, Laplace};
+
+let sensitivity = 1.0;  // Max change from one user
+let epsilon = 0.1;      // Privacy parameter
+let scale = sensitivity / epsilon;
+
+let laplace = Laplace::new(0.0, scale)?;
+let noise = laplace.sample(&mut rng);
+// noise ≈ +3.2
+```
+
+</Step>
+
+<Step>
+
+### Add Noise to Result
+
+```rust
+let noised_count = (true_count as f64 + noise).max(0.0) as u64;
+// 1 + 3.2 = 4.2 → 4 (rounded)
+
+// Return to user
+println!("Login feature: {} users", noised_count);
+// Output: "Login feature: 4 users" ✅ Privacy protected
+```
+
+</Step>
+</Steps>
+
+### Privacy-Accuracy Tradeoff
+
+<Callout type="info">
+**Epsilon (ε)** controls the privacy-accuracy tradeoff:
+- **Lower ε** = More privacy (more noise, less accuracy)
+- **Higher ε** = Less privacy (less noise, more accuracy)
+</Callout>
+
+| Epsilon | Privacy Level | Noise Magnitude | Use Case |
+|---------|---------------|-----------------|----------|
+| 0.01    | Maximum       | Very high       | Medical records, financial data |
+| 0.1     | Strong        | High            | Personal usage analytics |
+| 1.0     | Moderate      | Medium          | General analytics (recommended) |
+| 10.0    | Weak          | Low             | Public datasets |
+
+### Mathematical Guarantee
+
+Differential privacy provides **ε-differential privacy**, meaning:
+
+```
+Pr[M(D) ∈ S] ≤ e^ε × Pr[M(D') ∈ S]
+```
+
+Where:
+- `M` = Mechanism (your query with noise)
+- `D` = Dataset with Alice's data
+- `D'` = Dataset without Alice's data
+- `ε` = Privacy parameter
+
+**Translation:** An attacker can't determine if Alice's data is in the dataset with confidence > e^ε.
+
+### Properties
+
+1. **Composability** - Multiple DP queries degrade privacy predictably
+2. **Post-Processing** - Transforming DP results preserves privacy
+3. **Group Privacy** - Protects groups of k users with ε×k guarantee
+4. **Plausible Deniability** - Alice can deny participation
+
+### Example: Feature Usage Analytics
+
+```rust
+use telemetry_kit::analytics::*;
+
+// Without differential privacy ⚠️
+let stats = telemetry.analytics()
+    .feature_usage()
+    .group_by_feature()
+    .query()
+    .await?;
+
+println!("Export PDF: 1 user");  // Identifies individual!
+
+// With differential privacy ✅
+let stats = telemetry.analytics()
+    .feature_usage()
+    .group_by_feature()
+    .with_differential_privacy()
+    .epsilon(0.1)
+    .query()
+    .await?;
+
+println!("Export PDF: {} users", stats.get("export_pdf")?);
+// Output: "Export PDF: 4 users" (1 + noise)
+// Can't tell if anyone actually used it!
+```
+
+## Zero-Knowledge Analytics
+
+### What Is Zero-Knowledge Analytics?
+
+Zero-knowledge analytics allows you to compute **aggregate trends** without ever seeing individual user data. The server analyzes events in an encrypted form and only reveals statistical summaries.
+
+### The Problem
+
+Traditional analytics requires the server to see individual events:
+
+```rust
+// Server sees individual events ⚠️
+{
+  "user_id": "user_123",
+  "event": "login",
+  "timestamp": "2025-01-15T10:30:00Z"
+}
+
+// Even with hashed IDs, server can:
+// - Link events to the same user
+// - Build usage profiles
+// - Identify outliers
+```
+
+### The Solution
+
+**Homomorphic encryption** allows computation on encrypted data:
+
+```rust
+// Server receives encrypted events ✅
+{
+  "encrypted_data": "a8f3k2j9...",  // Can't decrypt
+  "proof": "zk_proof_data..."       // Proves validity
+}
+
+// Server computes on encrypted data
+let encrypted_count = sum(encrypted_events);
+
+// Client decrypts result
+let true_count = decrypt(encrypted_count);
+// Server never saw individual events!
+```
+
+### API Design (v0.4.0)
+
+<Tabs items={['Client Setup', 'Query Analytics', 'Server Config']}>
+<Tab value="Client Setup">
+
+```rust
+use telemetry_kit::prelude::*;
+use telemetry_kit::privacy::ZeroKnowledge;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Generate client encryption keys
+    let zk_keys = ZeroKnowledge::generate_keys()?;
+
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .with_zero_knowledge(zk_keys.public_key)
+        .build()?;
+
+    // Events are encrypted before sending
+    telemetry.track_command("login", |e| e.success(true)).await?;
+    // Server receives encrypted event ✅
+
+    // Query analytics (client-side decryption)
+    let stats = telemetry
+        .analytics()
+        .decrypt_with(zk_keys.private_key)
+        .feature_usage()
+        .query()
+        .await?;
+
+    println!("Login count: {}", stats.get("login")?);
+    // Server computed this on encrypted data!
+
+    Ok(())
+}
+```
+
+</Tab>
+<Tab value="Query Analytics">
+
+```rust
+// Fetch encrypted analytics from server
+let encrypted_stats = telemetry
+    .analytics()
+    .feature_usage()
+    .time_range(30.days())
+    .query_encrypted()
+    .await?;
+
+// Server returns encrypted aggregates
+// (server never decrypted individual events)
+
+// Client decrypts results
+let stats = encrypted_stats
+    .decrypt_with(&zk_keys.private_key)?;
+
+for (feature, count) in stats {
+    println!("{}: {}", feature, count);
+}
+
+// Privacy guarantee:
+// - Server computed aggregates
+// - Server never saw individual events
+// - Only client can decrypt results
+```
+
+</Tab>
+<Tab value="Server Config">
+
+```rust
+use telemetry_kit_server::privacy::ZKConfig;
+
+let server = TelemetryServer::builder()
+    .zero_knowledge(ZKConfig {
+        enabled: true,
+        verify_proofs: true,  // Verify ZK proofs
+        allow_unencrypted: false,  // Require encryption
+    })
+    .build()?;
+
+// Server processes encrypted events
+server.serve("127.0.0.1:8080").await?;
+
+// Analytics queries return encrypted results
+// Only clients with private keys can decrypt
+```
+
+</Tab>
+</Tabs>
+
+### How It Works
+
+<Steps>
+<Step>
+
+### Client Encrypts Event
+
+```rust
+use telemetry_kit::crypto::homomorphic;
+
+let event = Event::new("login", true);
+
+// Encrypt with public key
+let encrypted = homomorphic::encrypt(
+    &public_key,
+    &event.to_bytes()?
+)?;
+
+// Generate zero-knowledge proof
+let proof = homomorphic::prove(
+    &event,
+    &encrypted,
+    &public_key
+)?;
+
+// Send to server
+client.send(encrypted, proof).await?;
+```
+
+</Step>
+
+<Step>
+
+### Server Verifies and Aggregates
+
+```rust
+// Verify ZK proof (without decrypting)
+if !homomorphic::verify(&encrypted, &proof, &public_key) {
+    return Err("Invalid proof");
+}
+
+// Aggregate encrypted events
+let encrypted_sum = encrypted_events
+    .iter()
+    .fold(EncryptedValue::zero(), |acc, event| {
+        homomorphic::add(&acc, &event)  // Addition on ciphertext!
+    });
+
+// Return encrypted aggregate
+encrypted_sum
+```
+
+</Step>
+
+<Step>
+
+### Client Decrypts Result
+
+```rust
+// Receive encrypted aggregate from server
+let encrypted_count = server.query_analytics().await?;
+
+// Decrypt with private key
+let count = homomorphic::decrypt(
+    &private_key,
+    &encrypted_count
+)?;
+
+println!("Total logins: {}", count);
+// Server never knew this number!
+```
+
+</Step>
+</Steps>
+
+### Supported Operations
+
+**Homomorphic encryption** supports limited operations:
+
+| Operation | Supported | Example |
+|-----------|-----------|---------|
+| Addition | ✅ Yes | `SUM(events)` |
+| Subtraction | ✅ Yes | `COUNT(success) - COUNT(failure)` |
+| Multiplication (limited) | ⚠️ Partial | Quadratic only |
+| Division | ❌ No | Use client-side |
+| Comparison | ❌ No | Use client-side |
+
+### Performance Considerations
+
+<Callout type="warn">
+**Performance Impact:** Zero-knowledge analytics is computationally expensive:
+- Encryption: ~10ms per event
+- Server aggregation: 2-5x slower than plaintext
+- Decryption: ~5ms per result
+
+Recommended for **privacy-critical** use cases only.
+</Callout>
+
+## Encrypted User Segments
+
+### What Are Encrypted User Segments?
+
+Encrypted user segments allow you to **group users by behavior** while keeping their identities encrypted. You can analyze "users who did X" without ever knowing who those users are.
+
+### The Problem
+
+Traditional segmentation exposes user groups:
+
+```rust
+// Unencrypted segments ⚠️
+Segment: "Power Users" = [user_123, user_456, user_789]
+
+// Server (and attackers) can:
+// - See who's in each segment
+// - Track users across segments
+// - Correlate with external data
+```
+
+### The Solution
+
+**Secure multi-party computation** and **homomorphic encryption** allow segment creation without revealing membership:
+
+```rust
+// Encrypted segments ✅
+Segment: "Power Users" = [enc_a8f3, enc_k2j9, enc_m7n4]
+
+// Server knows:
+// - Segment size: 3 users
+// - Aggregate stats: avg session 45min
+
+// Server doesn't know:
+// - Who is in the segment
+// - Individual user behaviors
+// - Cross-segment correlation
+```
+
+### API Design (v0.4.0)
+
+<Tabs items={['Create Segment', 'Query Segment', 'Membership Test']}>
+<Tab value="Create Segment">
+
+```rust
+use telemetry_kit::segments::*;
+
+// Define segment criteria (client-side)
+let power_users = SegmentBuilder::new("power_users")
+    .criterion(|user| {
+        user.event_count > 100
+            && user.last_active < 7.days_ago()
+    })
+    .encrypted(true)  // Encrypt membership
+    .build()?;
+
+// Server computes segment without seeing members
+let segment = telemetry
+    .segments()
+    .create(power_users)
+    .await?;
+
+println!("Segment size: {}", segment.size());
+// Server knows size, not members
+```
+
+</Tab>
+<Tab value="Query Segment">
+
+```rust
+// Query segment analytics (encrypted)
+let stats = telemetry
+    .segments()
+    .get("power_users")
+    .analytics()
+    .feature_usage()
+    .time_range(30.days())
+    .query()
+    .await?;
+
+println!("Segment analytics:");
+println!("  Size: {}", stats.size);
+println!("  Avg session: {}min", stats.avg_session_duration);
+println!("  Top features: {:?}", stats.top_features);
+
+// All stats are aggregates over encrypted members
+// Server never decrypted individual memberships
+```
+
+</Tab>
+<Tab value="Membership Test">
+
+```rust
+// Check if current user is in segment (private)
+let is_member = telemetry
+    .segments()
+    .get("power_users")
+    .check_membership()  // Uses ZK proof
+    .await?;
+
+if is_member {
+    println!("You're a power user!");
+    // Show feature X
+}
+
+// Server confirmed membership via ZK proof
+// without revealing identity
+```
+
+</Tab>
+</Tabs>
+
+### How It Works
+
+<Steps>
+<Step>
+
+### Client Encrypts User ID
+
+```rust
+use telemetry_kit::crypto::paillier;
+
+let user_id = telemetry.user_id();
+
+// Encrypt user ID with homomorphic encryption
+let encrypted_id = paillier::encrypt(
+    &public_key,
+    user_id.as_bytes()
+)?;
+
+// Send to server for segment evaluation
+client.send_for_segmentation(encrypted_id).await?;
+```
+
+</Step>
+
+<Step>
+
+### Server Evaluates Criteria (Encrypted)
+
+```rust
+// Server evaluates segment criteria on encrypted data
+let meets_criteria = encrypted_id
+    .event_count > threshold_encrypted
+    && encrypted_id.last_active < cutoff_encrypted;
+
+// Result is encrypted boolean
+// Server doesn't know if this specific user qualifies
+
+// Add to segment if criteria met
+if meets_criteria {
+    segment.add_encrypted_member(encrypted_id);
+}
+```
+
+</Step>
+
+<Step>
+
+### Client Queries Membership
+
+```rust
+// Generate ZK proof of membership
+let proof = segment.generate_membership_proof(
+    &user_id,
+    &private_key
+)?;
+
+// Server verifies proof
+if server.verify_membership(&proof) {
+    // User is in segment ✅
+    // Server verified without learning identity
+}
+```
+
+</Step>
+</Steps>
+
+### Use Cases
+
+**1. A/B Testing (Privacy-Preserving)**
+
+```rust
+// Create test segment without revealing members
+let test_group = SegmentBuilder::new("feature_x_test")
+    .criterion(|user| user.id_hash % 2 == 0)  // 50% split
+    .encrypted(true)
+    .build()?;
+
+// Show feature only to test group
+if telemetry.segments().get("feature_x_test").am_i_member().await? {
+    show_feature_x();
+}
+
+// Server tracks conversion rates per segment
+// without knowing who's in which group
+```
+
+**2. User Cohorts**
+
+```rust
+// Define cohorts by behavior
+let cohorts = vec![
+    Segment::new("new_users").criterion(|u| u.days_since_signup < 7),
+    Segment::new("active_users").criterion(|u| u.events_7d > 10),
+    Segment::new("churned_users").criterion(|u| u.days_since_active > 30),
+];
+
+// All memberships encrypted
+for cohort in cohorts {
+    let stats = telemetry.segments().create(cohort).analytics().await?;
+    println!("{}: {} users", stats.name, stats.size);
+}
+```
+
+**3. Premium User Tracking**
+
+```rust
+// Track premium users without exposing list
+let premium = SegmentBuilder::new("premium")
+    .criterion(|user| user.has_subscription)
+    .encrypted(true)
+    .build()?;
+
+// Server knows aggregate premium user metrics
+// but not individual premium users
+```
+
+## Implementation Roadmap
+
+### v0.4.0 (Q2 2025) - Differential Privacy
+
+<Steps>
+<Step>
+
+**Foundation**
+- [ ] Implement Laplace mechanism for noise generation
+- [ ] Add `DifferentialPrivacy` configuration API
+- [ ] Support epsilon and delta parameters
+- [ ] Implement basic composition tracking
+
+</Step>
+
+<Step>
+
+**Analytics Integration**
+- [ ] Add `.with_differential_privacy()` to analytics queries
+- [ ] Implement privacy budget tracking
+- [ ] Add automatic epsilon consumption monitoring
+- [ ] Create privacy accountant for multiple queries
+
+</Step>
+
+<Step>
+
+**Server Support**
+- [ ] Server-side DP application to aggregates
+- [ ] Privacy budget enforcement
+- [ ] Audit logging for DP queries
+- [ ] Documentation and examples
+
+</Step>
+</Steps>
+
+### v0.5.0 (Q3 2025) - Zero-Knowledge Analytics
+
+<Steps>
+<Step>
+
+**Cryptographic Primitives**
+- [ ] Integrate Paillier homomorphic encryption
+- [ ] Implement ZK proof generation and verification
+- [ ] Key management API
+- [ ] Performance optimizations
+
+</Step>
+
+<Step>
+
+**Client Integration**
+- [ ] Transparent event encryption
+- [ ] Automatic proof generation
+- [ ] Client-side analytics decryption
+- [ ] Key rotation support
+
+</Step>
+
+<Step>
+
+**Server Implementation**
+- [ ] Encrypted event storage
+- [ ] Homomorphic aggregation engine
+- [ ] Proof verification system
+- [ ] Encrypted analytics endpoints
+
+</Step>
+</Steps>
+
+### v0.6.0 (Q4 2025) - Encrypted Segments
+
+<Steps>
+<Step>
+
+**Segment Engine**
+- [ ] Encrypted segment membership
+- [ ] Secure multi-party computation for criteria evaluation
+- [ ] ZK membership proofs
+- [ ] Segment analytics on encrypted data
+
+</Step>
+
+<Step>
+
+**Advanced Features**
+- [ ] Dynamic segment updates
+- [ ] Hierarchical segments
+- [ ] Cross-segment analytics (encrypted)
+- [ ] Performance optimizations
+
+</Step>
+</Steps>
+
+## Performance Benchmarks (Projected)
+
+<Callout type="info">
+These are estimated performance characteristics based on similar implementations. Actual performance will be measured and documented when features are implemented.
+</Callout>
+
+| Feature | Operation | Overhead | Throughput |
+|---------|-----------|----------|------------|
+| **Differential Privacy** | Add noise to aggregate | ~0.1ms | 10,000 queries/sec |
+| **Zero-Knowledge** | Encrypt event | ~10ms | 100 events/sec |
+| **Zero-Knowledge** | Aggregate (encrypted) | 2-5x slower | 20-50 queries/sec |
+| **Encrypted Segments** | Membership test | ~5ms | 200 tests/sec |
+| **Encrypted Segments** | Segment creation | ~50ms | 20 segments/sec |
+
+## Security Considerations
+
+### Differential Privacy
+
+1. **Epsilon Selection** - Lower is more private but less accurate
+2. **Composition** - Multiple queries degrade privacy (track budget)
+3. **Auxiliary Information** - DP doesn't protect against external data correlation
+4. **Post-Processing** - Always safe (doesn't degrade privacy)
+
+### Zero-Knowledge Analytics
+
+1. **Key Management** - Private keys must be protected
+2. **Proof Verification** - Always verify proofs server-side
+3. **Computational Cost** - ZK is expensive (use selectively)
+4. **Quantum Resistance** - Current schemes not quantum-safe
+
+### Encrypted Segments
+
+1. **Segment Size Leakage** - Size is revealed (add DP noise if sensitive)
+2. **Membership Inference** - Use ZK proofs to prevent leakage
+3. **Criteria Complexity** - Complex criteria harder to evaluate encrypted
+4. **Cache Timing Attacks** - Implement constant-time operations
+
+## Best Practices
+
+### 1. Choose the Right Privacy Level
+
+```rust
+// Low-sensitivity data (public analytics)
+.with_differential_privacy()
+.epsilon(1.0)
+
+// Medium-sensitivity (user behavior)
+.with_differential_privacy()
+.epsilon(0.1)
+
+// High-sensitivity (medical, financial)
+.with_zero_knowledge(keys)
+```
+
+### 2. Track Privacy Budget
+
+```rust
+let budget = PrivacyBudget::new(1.0);  // Total epsilon
+
+// Query 1
+telemetry.analytics()
+    .with_dp(0.3)  // Consumes 0.3
+    .query().await?;
+
+// Query 2
+telemetry.analytics()
+    .with_dp(0.5)  // Consumes 0.5
+    .query().await?;
+
+// Budget remaining: 0.2
+// Enforce limits to prevent privacy degradation
+```
+
+### 3. Combine Techniques
+
+```rust
+// Maximum privacy: DP + ZK + Encrypted Segments
+let telemetry = TelemetryKit::builder()
+    .service_name("ultra-private-app")?
+    .with_zero_knowledge(keys)           // Encrypt events
+    .with_differential_privacy(true)      // Noise aggregates
+    .with_encrypted_segments(true)        // Encrypted cohorts
+    .build()?;
+```
+
+### 4. Document Privacy Guarantees
+
+```rust
+// In your privacy policy:
+// "We use ε-differential privacy with ε=0.1 for all analytics queries.
+//  This provides a mathematical guarantee that individual user data
+//  cannot be inferred from aggregate statistics."
+```
+
+## Further Reading
+
+### Academic Papers
+
+- [Differential Privacy: A Survey](https://www.microsoft.com/en-us/research/publication/differential-privacy/)
+- [Zero-Knowledge Proofs](https://en.wikipedia.org/wiki/Zero-knowledge_proof)
+- [Homomorphic Encryption for Analytics](https://crypto.stanford.edu/craig/craig-thesis.pdf)
+
+### Standards & Guidelines
+
+- [NIST Differential Privacy Guidelines](https://www.nist.gov/itl/applied-cybersecurity/privacy-engineering/collaboration-space/focus-areas/de-id/dp-principles)
+- [Apple's Differential Privacy](https://www.apple.com/privacy/docs/Differential_Privacy_Overview.pdf)
+- [Google's Differential Privacy Library](https://github.com/google/differential-privacy)
+
+### Libraries Used
+
+- [rust-crypto](https://github.com/RustCrypto) - Cryptographic primitives
+- [paillier](https://crates.io/crates/paillier) - Homomorphic encryption
+- [rand_distr](https://crates.io/crates/rand_distr) - Laplace distribution
+
+## Get Involved
+
+These features are complex and require careful design. We'd love your input:
+
+- 💬 [Discuss on GitHub](https://github.com/ibrahimcesar/telemetry-kit/discussions)
+- 📝 [Review the RFC](https://github.com/ibrahimcesar/telemetry-kit/issues/new)
+- 🤝 [Contribute Implementation](https://github.com/ibrahimcesar/telemetry-kit/blob/main/CONTRIBUTING.md)
+
+**Have expertise in cryptography or differential privacy?** We'd especially appreciate your review and contributions!

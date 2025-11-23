@@ -1,0 +1,722 @@
+---
+title: Best Practices
+description: Patterns and best practices for different types of Rust projects
+icon: BookOpen
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+## Overview
+
+This guide covers best practices for integrating telemetry-kit into different types of Rust projects.
+
+## CLI Applications
+
+### Basic Setup
+
+CLI applications are the most common use case for telemetry-kit. Here's the recommended pattern:
+
+```rust
+use telemetry_kit::prelude::*;
+use clap::Parser;
+
+#[derive(Parser)]
+struct Cli {
+    #[arg(long)]
+    command: String,
+
+    #[arg(long)]
+    verbose: bool,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Cli::parse();
+
+    // ALWAYS check DO_NOT_TRACK first
+    if TelemetryKit::is_do_not_track_enabled() {
+        return run_without_telemetry(args).await;
+    }
+
+    // Initialize telemetry
+    let telemetry = TelemetryKit::builder()
+        .service_name(env!("CARGO_PKG_NAME"))?
+        .service_version(env!("CARGO_PKG_VERSION"))
+        .prompt_for_consent()?  // Ask on first run
+        .build()?;
+
+    // Track the command
+    let result = run_command(&args).await;
+
+    telemetry.track_command(&args.command, |event| {
+        let mut e = event.success(result.is_ok());
+        if args.verbose {
+            e = e.flag("--verbose");
+        }
+        e
+    }).await?;
+
+    // Clean shutdown (IMPORTANT!)
+    telemetry.shutdown().await?;
+
+    result
+}
+
+async fn run_without_telemetry(args: Cli) -> Result<(), Box<dyn std::error::Error>> {
+    run_command(&args).await
+}
+
+async fn run_command(args: &Cli) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Running command: {}", args.command);
+    Ok(())
+}
+```
+
+<Callout type="warning">
+**Critical:** Always call `telemetry.shutdown().await?` before your program exits to ensure events are flushed.
+</Callout>
+
+### Error Tracking
+
+Track errors with context for better debugging:
+
+```rust
+use telemetry_kit::prelude::*;
+
+async fn process_file(
+    path: &str,
+    telemetry: &TelemetryKit,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match std::fs::read_to_string(path) {
+        Ok(content) => {
+            telemetry.track_event("file_read", |event| {
+                event
+                    .property("file_type", detect_type(path))
+                    .property("size_bytes", content.len())
+                    .success(true)
+            }).await?;
+            Ok(())
+        }
+        Err(e) => {
+            telemetry.track_error(&e, |event| {
+                event
+                    .context("operation", "file_read")
+                    .context("file_type", detect_type(path))
+            }).await?;
+            Err(e.into())
+        }
+    }
+}
+
+fn detect_type(path: &str) -> &str {
+    if path.ends_with(".rs") { "rust" }
+    else if path.ends_with(".toml") { "toml" }
+    else { "unknown" }
+}
+```
+
+### Performance Tracking
+
+Track operation duration:
+
+```rust
+use std::time::Instant;
+
+async fn build_project(telemetry: &TelemetryKit) -> telemetry_kit::Result<()> {
+    let start = Instant::now();
+
+    // Your build logic
+    let result = run_build().await;
+
+    let duration = start.elapsed().as_millis() as u64;
+
+    telemetry.track_command("build", |event| {
+        event
+            .success(result.is_ok())
+            .duration_ms(duration)
+    }).await?;
+
+    result
+}
+
+async fn run_build() -> telemetry_kit::Result<()> {
+    // Build implementation
+    Ok(())
+}
+```
+
+### Subcommands
+
+Track subcommands hierarchically:
+
+```rust
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    Build {
+        #[arg(long)]
+        release: bool
+    },
+    Test {
+        #[arg(long)]
+        integration: bool
+    },
+    Deploy {
+        #[arg(long)]
+        environment: String
+    },
+}
+
+async fn handle_command(
+    cmd: Commands,
+    telemetry: &TelemetryKit,
+) -> telemetry_kit::Result<()> {
+    match cmd {
+        Commands::Build { release } => {
+            let result = build(release).await;
+            telemetry.track_command("build", |event| {
+                let mut e = event.success(result.is_ok());
+                if release {
+                    e = e.flag("--release");
+                }
+                e
+            }).await?;
+            result
+        }
+        Commands::Test { integration } => {
+            let result = test(integration).await;
+            telemetry.track_command("test", |event| {
+                let mut e = event.success(result.is_ok());
+                if integration {
+                    e = e.flag("--integration");
+                }
+                e
+            }).await?;
+            result
+        }
+        Commands::Deploy { environment } => {
+            let result = deploy(&environment).await;
+            telemetry.track_command("deploy", |event| {
+                event
+                    .property("environment", &environment)
+                    .success(result.is_ok())
+            }).await?;
+            result
+        }
+    }
+}
+
+async fn build(release: bool) -> telemetry_kit::Result<()> { Ok(()) }
+async fn test(integration: bool) -> telemetry_kit::Result<()> { Ok(()) }
+async fn deploy(env: &str) -> telemetry_kit::Result<()> { Ok(()) }
+```
+
+## Library Crates
+
+### Optional Telemetry
+
+Libraries should make telemetry **optional** and **opt-in**:
+
+```rust
+// In Cargo.toml
+[dependencies]
+telemetry-kit = { version = "0.2", optional = true }
+
+[features]
+default = []
+telemetry = ["dep:telemetry-kit"]
+```
+
+```rust
+// In your library code
+pub struct MyLibrary {
+    #[cfg(feature = "telemetry")]
+    telemetry: Option<telemetry_kit::TelemetryKit>,
+}
+
+impl MyLibrary {
+    pub fn new() -> Self {
+        Self {
+            #[cfg(feature = "telemetry")]
+            telemetry: None,
+        }
+    }
+
+    #[cfg(feature = "telemetry")]
+    pub fn with_telemetry(mut self, telemetry: telemetry_kit::TelemetryKit) -> Self {
+        self.telemetry = Some(telemetry);
+        self
+    }
+
+    pub async fn process(&self, data: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let result = self.do_processing(data).await;
+
+        #[cfg(feature = "telemetry")]
+        if let Some(ref telemetry) = self.telemetry {
+            telemetry.track_event("library_process", |event| {
+                event
+                    .property("data_size", data.len())
+                    .success(result.is_ok())
+            }).await.ok(); // Don't fail library operation on telemetry error
+        }
+
+        result
+    }
+
+    async fn do_processing(&self, _data: &str) -> Result<(), Box<dyn std::error::Error>> {
+        // Your processing logic
+        Ok(())
+    }
+}
+```
+
+### Passing Telemetry Context
+
+Allow library users to pass their own telemetry instance:
+
+```rust
+use telemetry_kit::TelemetryKit;
+
+pub struct Database {
+    telemetry: Option<TelemetryKit>,
+}
+
+impl Database {
+    pub fn new() -> Self {
+        Self { telemetry: None }
+    }
+
+    pub fn with_telemetry(mut self, telemetry: TelemetryKit) -> Self {
+        self.telemetry = Some(telemetry);
+        self
+    }
+
+    pub async fn query(&self, sql: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let start = std::time::Instant::now();
+        let result = self.execute_query(sql).await;
+        let duration = start.elapsed().as_millis() as u64;
+
+        if let Some(ref telemetry) = self.telemetry {
+            telemetry.track_event("db_query", |event| {
+                event
+                    .property("query_type", detect_query_type(sql))
+                    .duration_ms(duration)
+                    .success(result.is_ok())
+            }).await.ok();
+        }
+
+        result
+    }
+
+    async fn execute_query(&self, _sql: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        Ok(vec![])
+    }
+}
+
+fn detect_query_type(sql: &str) -> &str {
+    if sql.trim().to_lowercase().starts_with("select") { "SELECT" }
+    else if sql.trim().to_lowercase().starts_with("insert") { "INSERT" }
+    else if sql.trim().to_lowercase().starts_with("update") { "UPDATE" }
+    else { "OTHER" }
+}
+```
+
+<Callout type="info">
+**Library Best Practice:** Never fail library operations because telemetry failed. Use `.await.ok()` to ignore telemetry errors.
+</Callout>
+
+## Web Services
+
+### Axum Integration
+
+Track HTTP requests in web services:
+
+```rust
+use axum::{
+    Router,
+    routing::get,
+    extract::State,
+    http::StatusCode,
+};
+use telemetry_kit::TelemetryKit;
+use std::sync::Arc;
+
+#[derive(Clone)]
+struct AppState {
+    telemetry: Arc<TelemetryKit>,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-web-service")?
+        .service_version(env!("CARGO_PKG_VERSION"))
+        .strict_privacy()
+        .build()?;
+
+    let state = AppState {
+        telemetry: Arc::new(telemetry),
+    };
+
+    let app = Router::new()
+        .route("/api/users", get(get_users))
+        .route("/api/health", get(health_check))
+        .with_state(state);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
+
+async fn get_users(State(state): State<AppState>) -> Result<String, StatusCode> {
+    let start = std::time::Instant::now();
+
+    // Your handler logic
+    let result = fetch_users().await;
+
+    let duration = start.elapsed().as_millis() as u64;
+
+    state.telemetry.track_event("http_request", |event| {
+        event
+            .property("endpoint", "/api/users")
+            .property("method", "GET")
+            .duration_ms(duration)
+            .success(result.is_ok())
+    }).await.ok();
+
+    match result {
+        Ok(users) => Ok(users),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+async fn health_check() -> &'static str {
+    "OK"
+}
+
+async fn fetch_users() -> Result<String, Box<dyn std::error::Error>> {
+    Ok("[]".to_string())
+}
+```
+
+### Middleware Pattern
+
+Create middleware for automatic request tracking:
+
+```rust
+use axum::{
+    body::Body,
+    extract::Request,
+    middleware::Next,
+    response::Response,
+};
+use telemetry_kit::TelemetryKit;
+use std::sync::Arc;
+use std::time::Instant;
+
+async fn telemetry_middleware(
+    req: Request,
+    next: Next,
+) -> Response {
+    let start = Instant::now();
+    let method = req.method().to_string();
+    let path = req.uri().path().to_string();
+
+    let response = next.run(req).await;
+
+    let duration = start.elapsed().as_millis() as u64;
+    let status = response.status().as_u16();
+
+    // Get telemetry from extensions (added in app state)
+    if let Some(telemetry) = response.extensions().get::<Arc<TelemetryKit>>() {
+        telemetry.track_event("http_request", |event| {
+            event
+                .property("method", &method)
+                .property("path", &path)
+                .property("status", status)
+                .duration_ms(duration)
+                .success(status < 400)
+        }).await.ok();
+    }
+
+    response
+}
+```
+
+### Background Jobs
+
+Track background job execution:
+
+```rust
+use tokio::time::{interval, Duration};
+use telemetry_kit::TelemetryKit;
+
+async fn run_background_jobs(telemetry: TelemetryKit) {
+    let mut tick = interval(Duration::from_secs(60));
+
+    loop {
+        tick.tick().await;
+
+        let start = std::time::Instant::now();
+        let result = cleanup_old_data().await;
+        let duration = start.elapsed().as_millis() as u64;
+
+        telemetry.track_event("background_job", |event| {
+            event
+                .property("job_type", "cleanup")
+                .duration_ms(duration)
+                .success(result.is_ok())
+        }).await.ok();
+    }
+}
+
+async fn cleanup_old_data() -> Result<(), Box<dyn std::error::Error>> {
+    // Cleanup logic
+    Ok(())
+}
+```
+
+## Cross-Cutting Concerns
+
+### Always Respect Privacy
+
+Every application should check `DO_NOT_TRACK`:
+
+```rust
+#[tokio::main]
+async fn main() -> telemetry_kit::Result<()> {
+    // FIRST thing: check DO_NOT_TRACK
+    if TelemetryKit::is_do_not_track_enabled() {
+        return run_without_telemetry().await;
+    }
+
+    // Initialize telemetry only if allowed
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .strict_privacy()
+        .build()?;
+
+    run_with_telemetry(telemetry).await
+}
+
+async fn run_without_telemetry() -> telemetry_kit::Result<()> {
+    // Your app logic without telemetry
+    Ok(())
+}
+
+async fn run_with_telemetry(telemetry: TelemetryKit) -> telemetry_kit::Result<()> {
+    // Your app logic with telemetry
+    telemetry.shutdown().await?;
+    Ok(())
+}
+```
+
+### Sanitization
+
+Always sanitize sensitive data:
+
+```rust
+use telemetry_kit::privacy::PrivacyManager;
+
+async fn track_file_operation(
+    telemetry: &TelemetryKit,
+    file_path: &str,
+) -> telemetry_kit::Result<()> {
+    // Sanitize path before tracking
+    let safe_path = PrivacyManager::sanitize_path(file_path);
+
+    telemetry.track_event("file_operation", |event| {
+        event.property("path", &safe_path)
+    }).await
+}
+```
+
+### Batching Events
+
+For high-volume applications, batch events:
+
+```rust
+use tokio::sync::mpsc;
+use telemetry_kit::TelemetryKit;
+
+struct TelemetryBatcher {
+    tx: mpsc::Sender<String>,
+}
+
+impl TelemetryBatcher {
+    fn new(telemetry: TelemetryKit) -> Self {
+        let (tx, mut rx) = mpsc::channel::<String>(1000);
+
+        // Background task to batch and send
+        tokio::spawn(async move {
+            let mut batch = Vec::new();
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+
+            loop {
+                tokio::select! {
+                    Some(event) = rx.recv() => {
+                        batch.push(event);
+
+                        // Flush if batch is full
+                        if batch.len() >= 100 {
+                            flush_batch(&telemetry, &mut batch).await;
+                        }
+                    }
+                    _ = interval.tick() => {
+                        // Flush periodically
+                        if !batch.is_empty() {
+                            flush_batch(&telemetry, &mut batch).await;
+                        }
+                    }
+                }
+            }
+        });
+
+        Self { tx }
+    }
+
+    async fn track(&self, event_name: String) {
+        self.tx.send(event_name).await.ok();
+    }
+}
+
+async fn flush_batch(telemetry: &TelemetryKit, batch: &mut Vec<String>) {
+    for event in batch.drain(..) {
+        telemetry.track_event(&event, |e| e.success(true)).await.ok();
+    }
+}
+```
+
+### Testing
+
+Mock telemetry in tests:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_without_telemetry() {
+        // Set DO_NOT_TRACK for tests
+        std::env::set_var("DO_NOT_TRACK", "1");
+
+        let result = main().await;
+        assert!(result.is_ok());
+
+        std::env::remove_var("DO_NOT_TRACK");
+    }
+
+    #[tokio::test]
+    async fn test_with_telemetry() {
+        let telemetry = TelemetryKit::builder()
+            .service_name("test-app")
+            .unwrap()
+            .build()
+            .unwrap();
+
+        // Your tests
+        telemetry.track_event("test", |e| e.success(true)).await.unwrap();
+
+        telemetry.shutdown().await.unwrap();
+    }
+}
+```
+
+## Performance Best Practices
+
+### Minimize Overhead
+
+1. **Don't block on telemetry:**
+```rust
+// GOOD: Fire and forget
+tokio::spawn(async move {
+    telemetry.track_event("background", |e| e.success(true)).await.ok();
+});
+
+// BAD: Blocking main thread
+telemetry.track_event("blocking", |e| e.success(true)).await?;
+```
+
+2. **Use event batching for high-volume:**
+```rust
+// Batch 100 events at a time
+let events: Vec<_> = (0..100).collect();
+for chunk in events.chunks(10) {
+    for event in chunk {
+        telemetry.track_event(&format!("event_{}", event), |e| e.success(true)).await?;
+    }
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+}
+```
+
+3. **Limit data size:**
+```rust
+// GOOD: Limit property size
+let error_msg = format!("{:.500}", error); // Max 500 chars
+telemetry.track_event("error", |event| {
+    event.property("message", &error_msg)
+}).await?;
+
+// BAD: Unbounded data
+telemetry.track_event("error", |event| {
+    event.property("entire_file_contents", &huge_string)
+}).await?;
+```
+
+## Security Best Practices
+
+### Never Track Secrets
+
+```rust
+// NEVER DO THIS
+telemetry.track_event("auth", |event| {
+    event.property("password", password) // ❌ NEVER
+}).await?;
+
+// DO THIS INSTEAD
+telemetry.track_event("auth", |event| {
+    event.property("auth_method", "password").success(true) // ✅ GOOD
+}).await?;
+```
+
+### Use HTTPS for Sync
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .endpoint("https://telemetry.example.com")?  // ✅ HTTPS
+    // NOT: "http://..." ❌
+    .token("token")?
+    .secret("secret")?
+    .build()?;
+```
+
+## Summary Checklist
+
+- [ ] Always check `DO_NOT_TRACK` first
+- [ ] Call `shutdown()` before program exit
+- [ ] Use `.strict_privacy()` for EU apps
+- [ ] Sanitize file paths and emails
+- [ ] Never track passwords or secrets
+- [ ] Use HTTPS for sync endpoints
+- [ ] Make telemetry optional in libraries
+- [ ] Don't fail on telemetry errors in libraries
+- [ ] Batch high-volume events
+- [ ] Limit property data sizes
+- [ ] Test with `DO_NOT_TRACK=1`
+
+## Next Steps
+
+- [Privacy Compliance Guide](/docs/privacy-compliance) - GDPR/CCPA compliance
+- [Self-Hosting Guide](/docs/self-hosting) - Deploy your own server
+- [API Reference](/docs/api) - Complete API documentation

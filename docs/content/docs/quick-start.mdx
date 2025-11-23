@@ -1,0 +1,322 @@
+---
+title: Quick Start Guide
+description: Get telemetry-kit integrated into your Rust application in 5 minutes
+icon: Zap
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## 5-Minute Integration
+
+This guide will get you from zero to tracking telemetry in under 5 minutes.
+
+<Callout type="info">
+**Prerequisites:** Rust 1.70+ and Cargo installed
+</Callout>
+
+<Steps>
+<Step>
+
+### Add Dependency
+
+Add telemetry-kit to your `Cargo.toml`:
+
+```toml
+[dependencies]
+telemetry-kit = { version = "0.2", features = ["privacy", "sync"] }
+tokio = { version = "1", features = ["full"] }
+```
+
+**Feature flags:**
+- `privacy` - GDPR-compliant privacy controls (recommended)
+- `sync` - Auto-sync to backend server (optional)
+- `cli` - CLI tools and interactive prompts (optional)
+
+</Step>
+
+<Step>
+
+### Initialize Telemetry
+
+In your `main.rs`:
+
+```rust
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> telemetry_kit::Result<()> {
+    // Check if user opted out
+    if TelemetryKit::is_do_not_track_enabled() {
+        // User has DO_NOT_TRACK=1 set - respect their choice
+        return Ok(());
+    }
+
+    // Initialize telemetry
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-awesome-app")?
+        .service_version(env!("CARGO_PKG_VERSION"))
+        .build()?;
+
+    // Your application code here
+    run_app(&telemetry).await?;
+
+    // Clean shutdown (flushes events)
+    telemetry.shutdown().await?;
+    Ok(())
+}
+```
+
+</Step>
+
+<Step>
+
+### Track Events
+
+Track command execution, errors, and custom events:
+
+```rust
+async fn run_app(telemetry: &TelemetryKit) -> telemetry_kit::Result<()> {
+    // Track a command
+    telemetry.track_command("build", |event| {
+        event
+            .flag("--release")
+            .flag("--target=wasm32")
+            .success(true)
+            .duration_ms(1234)
+    }).await?;
+
+    // Track an error
+    if let Err(e) = risky_operation() {
+        telemetry.track_error(&e, |event| {
+            event.context("operation", "risky_operation")
+        }).await?;
+    }
+
+    // Track a custom event
+    telemetry.track_event("user_action", |event| {
+        event
+            .property("action", "file_open")
+            .property("file_type", "rust")
+            .success(true)
+    }).await?;
+
+    Ok(())
+}
+
+fn risky_operation() -> Result<(), Box<dyn std::error::Error>> {
+    // Your code here
+    Ok(())
+}
+```
+
+</Step>
+
+<Step>
+
+### Test It
+
+Run your application:
+
+```bash
+cargo run
+```
+
+Your events are now stored locally in `~/.telemetry-kit/events.db`. You can verify:
+
+```bash
+# Install CLI (optional)
+cargo install telemetry-kit-cli
+
+# View events
+telemetry-kit events list --limit 5
+
+# Export events
+telemetry-kit events export --format json > events.json
+```
+
+</Step>
+
+<Step>
+
+### Add Privacy (Optional but Recommended)
+
+Use strict privacy mode for GDPR compliance:
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-awesome-app")?
+    .service_version(env!("CARGO_PKG_VERSION"))
+    .strict_privacy()  // Enables strictest privacy settings
+    .build()?;
+```
+
+Or prompt users for consent:
+
+```rust
+// Requires "cli" feature
+let telemetry = TelemetryKit::builder()
+    .service_name("my-awesome-app")?
+    .service_version(env!("CARGO_PKG_VERSION"))
+    .prompt_for_consent()?  // Shows interactive prompt
+    .build()?;
+```
+
+</Step>
+
+<Step>
+
+### Enable Sync (Optional)
+
+Auto-sync events to your backend server:
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-awesome-app")?
+    .service_version(env!("CARGO_PKG_VERSION"))
+    .endpoint("https://telemetry.example.com")?
+    .token("your-api-token")?
+    .secret("your-hmac-secret")?
+    .enable_auto_sync()  // Enable automatic syncing
+    .build()?;
+```
+
+See [Auto-Sync Guide](/docs/auto-sync) for details.
+
+</Step>
+</Steps>
+
+## What You Get
+
+After completing this quick start, you have:
+
+- ✅ **Local event storage** - All events stored in SQLite
+- ✅ **Privacy-first** - Respects DO_NOT_TRACK by default
+- ✅ **Automatic sanitization** - Paths and emails are sanitized
+- ✅ **Offline-first** - Works without network connectivity
+- ✅ **Type-safe API** - Compile-time safety with Rust
+
+## Next Steps
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+  <a href="/docs/privacy" className="block p-4 border rounded-lg hover:border-blue-500 transition-colors">
+    <h3 className="font-semibold mb-2">Privacy Controls</h3>
+    <p className="text-sm text-muted-foreground">Learn about GDPR compliance, consent management, and data sanitization</p>
+  </a>
+
+  <a href="/docs/auto-sync" className="block p-4 border rounded-lg hover:border-blue-500 transition-colors">
+    <h3 className="font-semibold mb-2">Auto-Sync</h3>
+    <p className="text-sm text-muted-foreground">Set up automatic syncing to your backend server</p>
+  </a>
+
+  <a href="/docs/best-practices" className="block p-4 border rounded-lg hover:border-blue-500 transition-colors">
+    <h3 className="font-semibold mb-2">Best Practices</h3>
+    <p className="text-sm text-muted-foreground">Patterns for CLI apps, libraries, and web services</p>
+  </a>
+
+  <a href="/docs/api" className="block p-4 border rounded-lg hover:border-blue-500 transition-colors">
+    <h3 className="font-semibold mb-2">API Reference</h3>
+    <p className="text-sm text-muted-foreground">Complete API documentation</p>
+  </a>
+</div>
+
+## Common Issues
+
+### Events Not Appearing
+
+**Problem:** Events aren't showing up in the database.
+
+**Solutions:**
+1. Check if `DO_NOT_TRACK=1` is set: `echo $DO_NOT_TRACK`
+2. Verify consent wasn't denied: `telemetry-kit consent status`
+3. Ensure you're calling `.await?` on tracking methods
+4. Call `telemetry.shutdown().await?` to flush events
+
+### Build Errors
+
+**Problem:** Compilation fails with feature errors.
+
+**Solution:** Ensure you have the required features enabled:
+
+```toml
+[dependencies]
+telemetry-kit = { version = "0.2", features = ["privacy"] }
+```
+
+### Permission Denied
+
+**Problem:** Can't write to database.
+
+**Solution:** Check permissions on `~/.telemetry-kit/`:
+
+```bash
+chmod 755 ~/.telemetry-kit/
+chmod 644 ~/.telemetry-kit/events.db
+```
+
+## Complete Example
+
+Here's a complete, copy-paste example:
+
+```rust
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> telemetry_kit::Result<()> {
+    // Respect user privacy
+    if TelemetryKit::is_do_not_track_enabled() {
+        println!("Telemetry disabled (DO_NOT_TRACK=1)");
+        return Ok(());
+    }
+
+    // Initialize with privacy
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-awesome-app")?
+        .service_version(env!("CARGO_PKG_VERSION"))
+        .strict_privacy()
+        .build()?;
+
+    // Track application startup
+    telemetry.track_event("app_start", |event| {
+        event.success(true)
+    }).await?;
+
+    // Run your application
+    match run_app().await {
+        Ok(_) => {
+            telemetry.track_event("app_success", |event| {
+                event.success(true)
+            }).await?;
+        }
+        Err(e) => {
+            telemetry.track_error(&e, |event| {
+                event.context("phase", "runtime")
+            }).await?;
+            return Err(e.into());
+        }
+    }
+
+    // Clean shutdown
+    telemetry.shutdown().await?;
+    Ok(())
+}
+
+async fn run_app() -> Result<(), Box<dyn std::error::Error>> {
+    // Your application logic here
+    println!("Running application...");
+    Ok(())
+}
+```
+
+## Need Help?
+
+- [Documentation](/docs) - Full documentation
+- [Examples](https://github.com/ibrahimcesar/telemetry-kit/tree/main/examples) - Example projects
+- [GitHub Issues](https://github.com/ibrahimcesar/telemetry-kit/issues) - Report bugs
+- [API Reference](/docs/api) - Complete API docs
+
+---
+
+**Time to integrate:** ~5 minutes
+**Lines of code:** ~15
+**Privacy:** Built-in, GDPR-compliant

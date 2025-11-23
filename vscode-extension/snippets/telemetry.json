@@ -1,0 +1,316 @@
+{
+  "telemetry-kit initialization": {
+    "prefix": "tk-init",
+    "body": [
+      "use telemetry_kit::prelude::*;",
+      "",
+      "// Check DO_NOT_TRACK",
+      "if TelemetryKit::is_do_not_track_enabled() {",
+      "    return Ok(());",
+      "}",
+      "",
+      "let telemetry = TelemetryKit::builder()",
+      "    .service_name(\"${1:my-app}\")?",
+      "    .service_version(env!(\"CARGO_PKG_VERSION\"))",
+      "    ${2:// .strict_privacy()  // For GDPR compliance}",
+      "    .build()?;",
+      "",
+      "${0}"
+    ],
+    "description": "Initialize telemetry-kit with privacy checks"
+  },
+
+  "telemetry-kit initialization with consent": {
+    "prefix": "tk-init-consent",
+    "body": [
+      "use telemetry_kit::prelude::*;",
+      "",
+      "if TelemetryKit::is_do_not_track_enabled() {",
+      "    return Ok(());",
+      "}",
+      "",
+      "let telemetry = TelemetryKit::builder()",
+      "    .service_name(\"${1:my-app}\")?",
+      "    .service_version(env!(\"CARGO_PKG_VERSION\"))",
+      "    .prompt_for_consent()?  // Interactive consent",
+      "    .build()?;",
+      "",
+      "${0}"
+    ],
+    "description": "Initialize telemetry-kit with interactive consent prompt"
+  },
+
+  "telemetry-kit initialization with sync": {
+    "prefix": "tk-init-sync",
+    "body": [
+      "use telemetry_kit::prelude::*;",
+      "",
+      "if TelemetryKit::is_do_not_track_enabled() {",
+      "    return Ok(());",
+      "}",
+      "",
+      "let telemetry = TelemetryKit::builder()",
+      "    .service_name(\"${1:my-app}\")?",
+      "    .service_version(env!(\"CARGO_PKG_VERSION\"))",
+      "    .endpoint(\"${2:https://telemetry.example.com}\")?",
+      "    .token(\"${3:your-api-token}\")?",
+      "    .secret(\"${4:your-hmac-secret}\")?",
+      "    .enable_auto_sync()",
+      "    .build()?;",
+      "",
+      "${0}"
+    ],
+    "description": "Initialize telemetry-kit with auto-sync"
+  },
+
+  "track command event": {
+    "prefix": "tk-command",
+    "body": [
+      "telemetry.track_command(\"${1:command_name}\", |event| {",
+      "    event",
+      "        .flag(\"${2:--flag}\")",
+      "        .success(${3:true})",
+      "        .duration_ms(${4:0})",
+      "}).await?;"
+    ],
+    "description": "Track a command execution"
+  },
+
+  "track feature event": {
+    "prefix": "tk-feature",
+    "body": [
+      "telemetry.track_feature(\"${1:feature_name}\", |event| {",
+      "    event",
+      "        .property(\"${2:key}\", \"${3:value}\")",
+      "        .success(${4:true})",
+      "}).await?;"
+    ],
+    "description": "Track a feature usage"
+  },
+
+  "track custom event": {
+    "prefix": "tk-event",
+    "body": [
+      "telemetry.track_event(\"${1:event_name}\", |event| {",
+      "    event",
+      "        .property(\"${2:key}\", \"${3:value}\")",
+      "        .success(${4:true})",
+      "}).await?;"
+    ],
+    "description": "Track a custom event"
+  },
+
+  "track error": {
+    "prefix": "tk-error",
+    "body": [
+      "telemetry.track_error(&${1:error}, |event| {",
+      "    event",
+      "        .context(\"${2:operation}\", \"${3:value}\")",
+      "}).await?;"
+    ],
+    "description": "Track an error with context"
+  },
+
+  "track with timing": {
+    "prefix": "tk-timing",
+    "body": [
+      "let start = std::time::Instant::now();",
+      "${1:// Your code here}",
+      "let duration = start.elapsed().as_millis() as u64;",
+      "",
+      "telemetry.track_${2|command,feature,event|}(\"${3:name}\", |event| {",
+      "    event",
+      "        .success(${4:true})",
+      "        .duration_ms(duration)",
+      "}).await?;"
+    ],
+    "description": "Track an operation with timing"
+  },
+
+  "track result": {
+    "prefix": "tk-result",
+    "body": [
+      "let result = ${1:operation()};",
+      "",
+      "telemetry.track_event(\"${2:operation}\", |event| {",
+      "    event.success(result.is_ok())",
+      "}).await?;",
+      "",
+      "result"
+    ],
+    "description": "Track the result of an operation"
+  },
+
+  "graceful shutdown": {
+    "prefix": "tk-shutdown",
+    "body": [
+      "// Graceful shutdown - flushes all pending events",
+      "telemetry.shutdown().await?;"
+    ],
+    "description": "Gracefully shutdown telemetry"
+  },
+
+  "privacy DO_NOT_TRACK check": {
+    "prefix": "tk-dnt",
+    "body": [
+      "if TelemetryKit::is_do_not_track_enabled() {",
+      "    ${1:// User has opted out}",
+      "    return Ok(());",
+      "}"
+    ],
+    "description": "Check DO_NOT_TRACK environment variable"
+  },
+
+  "privacy strict mode": {
+    "prefix": "tk-privacy-strict",
+    "body": [
+      ".strict_privacy()  // GDPR-compliant: 30-day retention, consent required"
+    ],
+    "description": "Enable strict privacy mode (GDPR-compliant)"
+  },
+
+  "privacy custom config": {
+    "prefix": "tk-privacy-custom",
+    "body": [
+      ".consent_required(${1:true})",
+      ".data_retention(${2:30})  // days",
+      ".sanitize_paths(${3:true})",
+      ".sanitize_emails(${4:true})"
+    ],
+    "description": "Configure custom privacy settings"
+  },
+
+  "Axum middleware integration": {
+    "prefix": "tk-axum",
+    "body": [
+      "use axum::{extract::State, http::StatusCode};",
+      "use std::sync::Arc;",
+      "",
+      "#[derive(Clone)]",
+      "struct AppState {",
+      "    telemetry: Arc<TelemetryKit>,",
+      "}",
+      "",
+      "async fn ${1:handler}(State(state): State<AppState>) -> Result<String, StatusCode> {",
+      "    let start = std::time::Instant::now();",
+      "    ",
+      "    // Your handler logic",
+      "    ${2:let result = Ok(String::from(\"Hello\"));}",
+      "    ",
+      "    let duration = start.elapsed().as_millis() as u64;",
+      "    ",
+      "    state.telemetry.track_event(\"http_request\", |event| {",
+      "        event",
+      "            .property(\"endpoint\", \"${3:/api/endpoint}\")",
+      "            .duration_ms(duration)",
+      "            .success(result.is_ok())",
+      "    }).await.ok();",
+      "    ",
+      "    result",
+      "}"
+    ],
+    "description": "Axum handler with telemetry"
+  },
+
+  "instrumentation macro": {
+    "prefix": "tk-instrument",
+    "body": [
+      "#[telemetry_kit::instrument]",
+      "${1:async fn my_function() -> Result<()> {",
+      "    ${0:// Your code here}",
+      "}}"
+    ],
+    "description": "Add #[instrument] macro for automatic tracking"
+  },
+
+  "main function with telemetry": {
+    "prefix": "tk-main",
+    "body": [
+      "use telemetry_kit::prelude::*;",
+      "",
+      "#[tokio::main]",
+      "async fn main() -> Result<(), Box<dyn std::error::Error>> {",
+      "    if TelemetryKit::is_do_not_track_enabled() {",
+      "        return Ok(());",
+      "    }",
+      "",
+      "    let telemetry = TelemetryKit::builder()",
+      "        .service_name(\"${1:my-app}\")?",
+      "        .service_version(env!(\"CARGO_PKG_VERSION\"))",
+      "        .build()?;",
+      "",
+      "    telemetry.track_event(\"app_start\", |e| e.success(true)).await?;",
+      "",
+      "    ${0:// Your application logic}",
+      "",
+      "    telemetry.shutdown().await?;",
+      "    Ok(())",
+      "}"
+    ],
+    "description": "Complete main function with telemetry"
+  },
+
+  "CLI subcommand tracking": {
+    "prefix": "tk-cli-subcommand",
+    "body": [
+      "match ${1:command} {",
+      "    Commands::${2:Build} { ${3:release} } => {",
+      "        let start = std::time::Instant::now();",
+      "        let result = ${4:build(release)}.await;",
+      "        let duration = start.elapsed().as_millis() as u64;",
+      "        ",
+      "        telemetry.track_command(\"${5:build}\", |event| {",
+      "            let mut e = event.success(result.is_ok()).duration_ms(duration);",
+      "            if ${3:release} {",
+      "                e = e.flag(\"--release\");",
+      "            }",
+      "            e",
+      "        }).await?;",
+      "        ",
+      "        result",
+      "    }",
+      "    ${0}",
+      "}"
+    ],
+    "description": "Track CLI subcommand execution"
+  },
+
+  "library integration": {
+    "prefix": "tk-library",
+    "body": [
+      "pub struct ${1:MyLibrary} {",
+      "    #[cfg(feature = \"telemetry\")]",
+      "    telemetry: Option<TelemetryKit>,",
+      "}",
+      "",
+      "impl ${1:MyLibrary} {",
+      "    pub fn new() -> Self {",
+      "        Self {",
+      "            #[cfg(feature = \"telemetry\")]",
+      "            telemetry: None,",
+      "        }",
+      "    }",
+      "",
+      "    #[cfg(feature = \"telemetry\")]",
+      "    pub fn with_telemetry(mut self, telemetry: TelemetryKit) -> Self {",
+      "        self.telemetry = Some(telemetry);",
+      "        self",
+      "    }",
+      "",
+      "    pub async fn ${2:operation}(&self) -> Result<()> {",
+      "        let result = ${3:self.do_work()}.await;",
+      "        ",
+      "        #[cfg(feature = \"telemetry\")]",
+      "        if let Some(ref telemetry) = self.telemetry {",
+      "            telemetry.track_event(\"${4:library_operation}\", |event| {",
+      "                event.success(result.is_ok())",
+      "            }).await.ok();",
+      "        }",
+      "        ",
+      "        result",
+      "    }",
+      "}"
+    ],
+    "description": "Library crate with optional telemetry"
+  }
+}

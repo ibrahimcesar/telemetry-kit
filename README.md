@@ -17,7 +17,9 @@ _Privacy-first usage analytics for library authors_
 
 The following features are **fully implemented and tested**:
 
-- ✅ **Auto-Sync Background Task**: Automatic event synchronization in the background (NEW!)
+- ✅ **Interactive Consent Prompts**: First-run consent dialogs for privacy compliance (NEW!)
+- ✅ **Smart Instrumentation Recommendations**: AI-powered code analysis suggesting where to add telemetry (NEW!)
+- ✅ **Auto-Sync Background Task**: Automatic event synchronization in the background
 - ✅ **SQLite → Service Sync Protocol**: Offline-first event buffering with HMAC-SHA256 authentication
 - ✅ **Privacy-First User IDs**: Anonymous client identifiers with `client_` prefix (SHA-256 hashed machine IDs)
 - ✅ **Event Tracking**: Command and feature event builders with fluent API
@@ -87,7 +89,18 @@ Manage telemetry configuration and operations from the command line.
 # Install CLI
 cargo install telemetry-kit --features cli
 
-# Interactive setup
+# Create a new project with telemetry pre-configured
+telemetry-kit new my-app                    # CLI application
+telemetry-kit new my-lib -p lib             # Library
+telemetry-kit new my-api -p web --with-sync # Web service with sync
+
+# Analyze code for instrumentation opportunities (NEW!)
+telemetry-kit analyze                       # Analyze current directory
+telemetry-kit analyze --detailed            # Show detailed recommendations with code snippets
+telemetry-kit analyze --path src/           # Analyze specific directory
+telemetry-kit analyze --format json         # Output as JSON
+
+# Interactive setup (for existing projects)
 telemetry-kit init
 
 # View statistics
@@ -104,6 +117,8 @@ telemetry-kit clean
 ```
 
 **Available Commands:**
+- `new` - Create new projects with telemetry pre-configured
+- `analyze` - Get smart recommendations on where to add instrumentation (NEW!)
 - `init` - Interactive project setup with credential configuration
 - `test` - Validate sync credentials
 - `stats` - View event statistics (total, synced, unsynced)
@@ -380,19 +395,61 @@ telemetry-kit is **privacy-first by design**:
 
 ### Privacy Features
 
+**Interactive Consent Prompts (NEW!):**
+
 ```rust
-telemetry_kit::init()
-    .privacy(|privacy| {
-        privacy
-            .hash_user_ids()           // SHA-256 user identifiers
-            .sanitize_emails()         // email@→hash@domain
-            .exclude_ip_addresses()    // Never capture IPs
-            .redact_env_vars(&["API_KEY", "TOKEN"])
-            .max_string_length(100)    // Truncate long strings
-            .exclude_fields(&["password", "secret"])
-    })
-    .init();
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Show interactive consent dialog on first run
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .service_version("1.0.0")
+        .prompt_for_consent()?  // Full prompt with privacy details
+        .build()?;
+
+    // Or use minimal one-liner prompt
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .prompt_minimal()?      // Shorter prompt
+        .build()?;
+
+    Ok(())
+}
 ```
+
+**Privacy Configuration:**
+
+```rust
+use telemetry_kit::prelude::*;
+use telemetry_kit::privacy::PrivacyConfig;
+
+// Strict privacy mode (GDPR-compliant)
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .strict_privacy()  // Requires consent, sanitizes data, 30-day retention
+    .build()?;
+
+// Or configure individually
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .consent_required(true)
+    .sanitize_paths(true)
+    .sanitize_emails(true)
+    .data_retention(90)  // Days
+    .build()?;
+```
+
+**Manage Consent via CLI:**
+
+```bash
+telemetry-kit consent grant    # Enable telemetry
+telemetry-kit consent deny     # Disable telemetry
+telemetry-kit consent status   # Check current status
+```
+
+See [examples/interactive_consent.rs](examples/interactive_consent.rs) and [examples/privacy.rs](examples/privacy.rs) for complete examples.
 
 ## 🤝 Contributing
 

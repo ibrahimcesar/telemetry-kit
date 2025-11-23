@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New example: `examples/auto_sync.rs`
 
 - **CLI Tool** (`telemetry-kit`)
+  - `new` - Create new Rust projects with telemetry pre-configured
+    - Binary/CLI application template
+    - Library template with example integration
+    - Web service template (Axum) with telemetry
+    - Optional sync configuration (`--with-sync` flag)
+    - Automatic git initialization
+    - README generation with privacy documentation
+    - Three project types: bin, lib, web
+  - `analyze` - Smart instrumentation recommendations (NEW!)
+    - Pattern detection engine for common instrumentation points
+    - Detects main functions, async Result functions, HTTP handlers, database operations
+    - Priority-based recommendations (High/Medium/Low)
+    - Detailed mode with code snippets
+    - JSON output format for tooling integration
+    - Scans Rust projects and suggests where to add telemetry
   - `init` - Interactive project setup with credential configuration
   - `test` - Validate sync credentials and test connectivity
   - `stats` - View event statistics (total, synced, unsynced)
@@ -28,11 +43,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Colored output for better UX
   - Global `--service` flag to operate on specific services
 
+- **Interactive Consent Prompts** (NEW!)
+  - First-run consent dialog for applications
+  - Two prompt styles: full (detailed) and minimal (one-liner)
+  - Builder API methods: `.prompt_for_consent()`, `.prompt_minimal()`
+  - Automatic consent status detection (shows prompt only when Unknown)
+  - Privacy-first: defaults to NO, respects user choice
+  - Stored preferences in `~/.telemetry-kit/<service>-consent.json`
+  - Examples: `examples/interactive_consent.rs`, `examples/minimal_consent.rs`
+  - Integrates with existing `telemetry-kit consent` CLI commands
+
+- **Comprehensive Documentation Suite** (NEW!)
+  - **Quick Start Guide** (`docs/content/docs/quick-start.mdx`)
+    - 5-minute integration tutorial with step-by-step instructions
+    - Complete examples for CLI, privacy, and sync setup
+    - Common issues troubleshooting section
+    - ~200 lines of hands-on content
+  - **Best Practices Guide** (`docs/content/docs/best-practices.mdx`)
+    - CLI application patterns (error tracking, performance monitoring, subcommands)
+    - Library crate patterns (optional telemetry, context passing)
+    - Web service integration (Axum middleware, background jobs)
+    - Cross-cutting concerns (privacy, sanitization, batching, testing)
+    - Performance and security best practices
+    - ~500 lines with extensive code examples
+  - **Privacy Compliance Guide** (`docs/content/docs/privacy-compliance.mdx`)
+    - Complete GDPR implementation (consent, data minimization, user rights, retention)
+    - CCPA implementation (notice, opt-out, access, deletion)
+    - Multi-jurisdiction compliance strategies
+    - Privacy policy template and compliance checklist
+    - Common pitfalls and testing examples
+    - ~600 lines of compliance-focused content
+  - **Enhanced Self-Hosting Production Guide** (`docs/content/docs/self-hosting.mdx`)
+    - Database optimization (connection pooling, indexing, partitioning)
+    - Security hardening (TLS/SSL, rate limiting, IP allowlisting, CORS)
+    - Monitoring & observability (structured logging, Prometheus, Grafana)
+    - High availability (multi-region deployment, load balancing)
+    - Data retention & archival (automated cleanup, S3 export)
+    - Disaster recovery (backup strategy, point-in-time recovery)
+    - Performance tuning (PostgreSQL config, batch optimization)
+    - Operational playbooks (incident response, deployment runbooks)
+    - Cost optimization (storage compression, caching)
+    - Added ~600 lines of production-ready content
+  - Updated navigation structure with improved organization
+
 ### Planned for v1.0.0
-- Privacy controls (consent flow, data sanitization)
 - Query API endpoints
 - Advanced analytics dashboard
-- Full production deployment guides
 
 ## [0.2.0-alpha.1] - 2024-11-20
 

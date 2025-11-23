@@ -1,0 +1,770 @@
+---
+title: Privacy Compliance Guide
+description: GDPR and CCPA compliance handbook for telemetry-kit
+icon: Shield
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+## Overview
+
+This guide helps you build privacy-compliant applications using telemetry-kit, with specific guidance for GDPR (EU) and CCPA (California) regulations.
+
+<Callout type="info">
+**Disclaimer:** This guide provides technical implementation guidance. Consult with legal counsel for compliance advice specific to your jurisdiction and use case.
+</Callout>
+
+## Quick Compliance Checklist
+
+### GDPR Compliance
+
+- [ ] Obtain explicit user consent before tracking
+- [ ] Provide clear privacy notice
+- [ ] Enable data subject rights (access, deletion, portability)
+- [ ] Implement data minimization
+- [ ] Set appropriate retention periods (≤90 days recommended)
+- [ ] Anonymize or pseudonymize personal data
+- [ ] Document your data processing activities
+- [ ] Appoint a DPO if required
+
+### CCPA Compliance
+
+- [ ] Provide notice at collection
+- [ ] Offer opt-out mechanism
+- [ ] Honor "Do Not Sell" requests
+- [ ] Provide data access upon request
+- [ ] Enable data deletion
+- [ ] Avoid discrimination against users who opt out
+
+## GDPR Implementation Guide
+
+### 1. Consent Management
+
+GDPR requires **explicit, informed consent** before processing personal data.
+
+#### Implementation
+
+```rust
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> telemetry_kit::Result<()> {
+    // Initialize with consent requirement
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .service_version(env!("CARGO_PKG_VERSION"))
+        .strict_privacy()  // Enables GDPR-compliant defaults
+        .build()?;
+
+    // Events will be silently ignored until consent is granted
+    Ok(())
+}
+```
+
+#### Interactive Consent Prompt
+
+```rust
+use telemetry_kit::prelude::*;
+use dialoguer::Confirm;
+
+#[tokio::main]
+async fn main() -> telemetry_kit::Result<()> {
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .service_version("1.0.0")
+        .consent_required(true)
+        .build()?;
+
+    // Show GDPR-compliant consent dialog
+    let consent_text = r#"
+Privacy Notice & Consent Request
+
+We collect anonymous usage telemetry to improve our software.
+
+Data Collected:
+  • Command usage and feature utilization
+  • Success/failure status of operations
+  • Performance metrics (timing, not content)
+  • Operating system and architecture
+
+Privacy Guarantees:
+  ✓ All data is anonymized
+  ✓ No personal information (PII) is collected
+  ✓ User IDs are SHA-256 hashed
+  ✓ File paths are sanitized (usernames removed)
+  ✓ Email addresses are hashed if detected
+
+Your Rights:
+  • Access your data: telemetry-kit events export
+  • Delete your data: telemetry-kit events clear
+  • Withdraw consent: telemetry-kit consent deny
+  • Opt out anytime: export DO_NOT_TRACK=1
+
+Data Retention: 30 days
+
+Legal Basis: Consent (GDPR Art. 6(1)(a))
+
+Controller: [Your Organization Name]
+Contact: privacy@example.com
+
+"#;
+
+    println!("{}", consent_text);
+
+    if Confirm::new()
+        .with_prompt("Do you consent to anonymous telemetry collection?")
+        .default(false)
+        .interact()
+        .unwrap_or(false)
+    {
+        telemetry.grant_consent()?;
+        println!("✓ Consent granted. Thank you!");
+    } else {
+        telemetry.deny_consent()?;
+        println!("✓ Consent denied. No data will be collected.");
+    }
+
+    // Your application logic
+    telemetry.shutdown().await?;
+    Ok(())
+}
+```
+
+### 2. Data Minimization
+
+GDPR requires collecting only necessary data.
+
+#### What to Track
+
+```rust
+// ✅ GOOD: Necessary, anonymized data
+telemetry.track_command("build", |event| {
+    event
+        .flag("--release")
+        .success(true)
+        .duration_ms(1234)
+}).await?;
+
+// ✅ GOOD: Aggregated metrics
+telemetry.track_event("feature_usage", |event| {
+    event.property("feature", "syntax_highlighting")
+}).await?;
+```
+
+#### What NOT to Track
+
+```rust
+// ❌ BAD: Personal information
+telemetry.track_event("user", |event| {
+    event
+        .property("name", "John Doe")           // ❌ PII
+        .property("email", "john@example.com")  // ❌ PII
+        .property("ip", "192.168.1.1")          // ❌ PII
+}).await?;
+
+// ❌ BAD: File contents
+telemetry.track_event("file", |event| {
+    event.property("contents", file_contents)   // ❌ Potentially sensitive
+}).await?;
+```
+
+### 3. Data Subject Rights
+
+GDPR grants users the following rights:
+
+#### Right to Access (Art. 15)
+
+Provide users access to their data:
+
+```bash
+# CLI command for users
+telemetry-kit events export --format json > my-data.json
+```
+
+```rust
+// Programmatic access
+let events = telemetry.export_events().await?;
+println!("Your telemetry data: {}", serde_json::to_string_pretty(&events)?);
+```
+
+#### Right to Erasure (Art. 17)
+
+Allow users to delete their data:
+
+```bash
+# CLI command
+telemetry-kit events clear
+```
+
+```rust
+// Programmatic deletion
+telemetry.clear_all_events().await?;
+println!("✓ All your telemetry data has been deleted.");
+```
+
+#### Right to Data Portability (Art. 20)
+
+Export data in machine-readable format:
+
+```bash
+# Export as JSON
+telemetry-kit events export --format json > data.json
+
+# Export as CSV
+telemetry-kit events export --format csv > data.csv
+```
+
+#### Right to Object (Art. 21)
+
+Respect opt-out requests:
+
+```bash
+# User can opt out anytime
+export DO_NOT_TRACK=1
+```
+
+```rust
+// Always check DO_NOT_TRACK
+if TelemetryKit::is_do_not_track_enabled() {
+    println!("Telemetry disabled per user request");
+    return Ok(());
+}
+```
+
+### 4. Data Retention
+
+GDPR requires limiting retention periods.
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .data_retention(30)  // 30 days (GDPR-compliant)
+    .build()?;
+
+// Periodically clean up old data
+let deleted = telemetry.cleanup().await?;
+println!("Deleted {} events older than 30 days", deleted);
+```
+
+**Recommended retention periods:**
+- **30 days** - Strict compliance (recommended for EU users)
+- **90 days** - Balanced approach
+- **Never use 0** (unlimited retention) for production
+
+### 5. Anonymization
+
+Ensure data cannot identify individuals:
+
+```rust
+use telemetry_kit::privacy::PrivacyManager;
+
+// Paths are automatically sanitized
+let safe_path = PrivacyManager::sanitize_path("/Users/john/Documents/secret.txt");
+println!("{}", safe_path); // Output: ~/Documents/secret.txt
+
+// Emails are automatically hashed
+let safe_email = PrivacyManager::sanitize_email("user@example.com");
+println!("{}", safe_email); // Output: email_b4c9a289323b21a0
+```
+
+Enable automatic sanitization:
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .sanitize_paths(true)   // Remove usernames from paths
+    .sanitize_emails(true)  // Hash email addresses
+    .build()?;
+```
+
+### 6. Privacy Notice Template
+
+Include this in your application documentation:
+
+```markdown
+# Privacy Notice
+
+## Data Controller
+[Your Organization Name]
+[Address]
+[Contact Email]
+
+## Data We Collect
+We collect anonymous usage telemetry to improve our software:
+
+- Command usage and feature utilization
+- Success/failure status of operations
+- Performance metrics (timing, not content)
+- Operating system and architecture
+
+## Legal Basis
+Consent (GDPR Article 6(1)(a))
+
+## Data Processing
+- All data is anonymized using SHA-256 hashing
+- File paths are sanitized to remove usernames
+- Email addresses are hashed if detected
+- No personal identifiable information (PII) is collected
+
+## Data Retention
+Telemetry data is retained for 30 days and then automatically deleted.
+
+## Your Rights
+You have the right to:
+
+- **Access** your data: `telemetry-kit events export`
+- **Delete** your data: `telemetry-kit events clear`
+- **Withdraw consent**: `telemetry-kit consent deny`
+- **Opt out**: Set `DO_NOT_TRACK=1` environment variable
+
+## Data Transfers
+[If applicable, describe any data transfers outside EU]
+
+## Contact
+For privacy inquiries: privacy@example.com
+Data Protection Officer: dpo@example.com
+
+## Last Updated
+[Date]
+```
+
+## CCPA Implementation Guide
+
+### 1. Notice at Collection
+
+CCPA requires informing users **at or before** data collection.
+
+```rust
+use telemetry_kit::prelude::*;
+
+fn show_ccpa_notice() {
+    println!(r#"
+NOTICE OF DATA COLLECTION (CCPA)
+
+We collect the following categories of information:
+  • Usage data (commands, features used)
+  • Performance metrics (timing, success/failure)
+  • Device information (OS, architecture)
+
+Purpose: Improve software quality and user experience
+
+Your Rights:
+  • Right to Know: telemetry-kit events export
+  • Right to Delete: telemetry-kit events clear
+  • Right to Opt-Out: export DO_NOT_TRACK=1
+
+For more information: privacy@example.com
+"#);
+}
+
+#[tokio::main]
+async fn main() -> telemetry_kit::Result<()> {
+    // Show notice on first run
+    let consent_file = dirs::home_dir()
+        .unwrap()
+        .join(".telemetry-kit")
+        .join("consent.json");
+
+    if !consent_file.exists() {
+        show_ccpa_notice();
+    }
+
+    let telemetry = TelemetryKit::builder()
+        .service_name("my-app")?
+        .build()?;
+
+    // Your application logic
+    telemetry.shutdown().await?;
+    Ok(())
+}
+```
+
+### 2. Right to Opt-Out
+
+CCPA requires a clear opt-out mechanism.
+
+```rust
+// Always respect DO_NOT_TRACK
+if TelemetryKit::is_do_not_track_enabled() {
+    println!("✓ Telemetry opt-out respected (DO_NOT_TRACK=1)");
+    return Ok(());
+}
+```
+
+Provide opt-out instructions in your docs:
+
+```markdown
+## How to Opt Out of Telemetry
+
+Set the DO_NOT_TRACK environment variable:
+
+bash
+# Permanently (add to ~/.bashrc or ~/.zshrc)
+export DO_NOT_TRACK=1
+
+# For a single command
+DO_NOT_TRACK=1 my-app build
+```
+
+### 3. Right to Know
+
+Provide access to collected data:
+
+```rust
+use telemetry_kit::prelude::*;
+
+async fn handle_data_request(telemetry: &TelemetryKit) -> telemetry_kit::Result<()> {
+    println!("Exporting your telemetry data...");
+
+    let events = telemetry.export_events().await?;
+    let json = serde_json::to_string_pretty(&events)?;
+
+    std::fs::write("my-telemetry-data.json", json)?;
+    println!("✓ Data exported to my-telemetry-data.json");
+
+    Ok(())
+}
+```
+
+### 4. Right to Delete
+
+Enable data deletion:
+
+```rust
+async fn handle_deletion_request(telemetry: &TelemetryKit) -> telemetry_kit::Result<()> {
+    println!("Deleting all your telemetry data...");
+
+    telemetry.clear_all_events().await?;
+    telemetry.deny_consent()?;
+
+    println!("✓ All data deleted and future collection disabled");
+
+    Ok(())
+}
+```
+
+## Multi-Jurisdiction Compliance
+
+For applications serving both EU and California users:
+
+```rust
+use telemetry_kit::prelude::*;
+
+#[tokio::main]
+async fn main() -> telemetry_kit::Result<()> {
+    // Detect user location (example)
+    let user_location = detect_user_location();
+
+    let telemetry = match user_location {
+        "EU" => {
+            // GDPR: Require explicit consent
+            TelemetryKit::builder()
+                .service_name("my-app")?
+                .strict_privacy()      // 30-day retention
+                .consent_required(true)
+                .prompt_for_consent()? // Interactive prompt
+                .build()?
+        }
+        "CA" => {
+            // CCPA: Opt-out model
+            show_ccpa_notice();
+            TelemetryKit::builder()
+                .service_name("my-app")?
+                .data_retention(90)
+                .build()?
+        }
+        _ => {
+            // Default: Privacy-first
+            TelemetryKit::builder()
+                .service_name("my-app")?
+                .strict_privacy()
+                .build()?
+        }
+    };
+
+    // Your application logic
+    telemetry.shutdown().await?;
+    Ok(())
+}
+
+fn detect_user_location() -> &'static str {
+    // Implement location detection
+    // This is a simplified example
+    "EU"
+}
+
+fn show_ccpa_notice() {
+    println!("CCPA Notice of Data Collection...");
+}
+```
+
+## Data Processing Agreement (DPA)
+
+If you sync telemetry to a backend server, ensure you have a DPA in place.
+
+### Self-Hosting (Recommended)
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .endpoint("https://telemetry.yourcompany.com")?  // Your server
+    .token("token")?
+    .secret("secret")?
+    .build()?;
+```
+
+### Third-Party Hosting
+
+If using a third-party service:
+1. Ensure they are GDPR/CCPA compliant
+2. Sign a Data Processing Agreement (DPA)
+3. Verify they use Standard Contractual Clauses (SCCs) for EU transfers
+4. Document the relationship in your privacy policy
+
+## Compliance Monitoring
+
+### Audit Logs
+
+Track consent changes:
+
+```rust
+// Log consent events
+telemetry.track_event("consent_change", |event| {
+    event
+        .property("status", "granted")
+        .property("timestamp", chrono::Utc::now().to_rfc3339())
+}).await?;
+```
+
+### Regular Audits
+
+Periodically verify compliance:
+
+```bash
+# Check data retention
+telemetry-kit events list --older-than 30
+
+# Verify consent status
+telemetry-kit consent status
+
+# Export for audit
+telemetry-kit events export --format json > audit-$(date +%Y%m%d).json
+```
+
+## Privacy by Design Checklist
+
+- [ ] **Default to privacy-preserving settings**
+  ```rust
+  .strict_privacy()  // Use strict mode by default
+  ```
+
+- [ ] **Minimize data collection**
+  ```rust
+  // Only track what's necessary
+  telemetry.track_command("build", |e| e.success(true)).await?;
+  ```
+
+- [ ] **Anonymize from the start**
+  ```rust
+  .sanitize_paths(true)
+  .sanitize_emails(true)
+  ```
+
+- [ ] **Encrypt data in transit**
+  ```rust
+  .endpoint("https://...")?  // HTTPS only
+  ```
+
+- [ ] **Limit retention**
+  ```rust
+  .data_retention(30)  // 30 days max
+  ```
+
+- [ ] **Enable user control**
+  ```rust
+  .consent_required(true)
+  .prompt_for_consent()?
+  ```
+
+## Documentation Requirements
+
+### Privacy Policy
+
+Your privacy policy should include:
+
+1. **Data Controller Information**
+   - Organization name and contact details
+   - DPO contact (if applicable)
+
+2. **Data Collection**
+   - What data is collected
+   - Why it's collected (purpose)
+   - Legal basis (consent, legitimate interest)
+
+3. **Data Usage**
+   - How data is processed
+   - Who has access
+   - Retention periods
+
+4. **User Rights**
+   - How to access data
+   - How to delete data
+   - How to withdraw consent
+   - How to opt out
+
+5. **Data Transfers**
+   - Where data is stored
+   - International transfers (if any)
+   - Safeguards in place
+
+### Code Documentation
+
+Document privacy features in your README:
+
+```markdown
+## Privacy
+
+This application respects your privacy:
+
+- ✅ **Anonymous by default** - All data is anonymized
+- ✅ **DO_NOT_TRACK support** - Set `DO_NOT_TRACK=1` to disable
+- ✅ **Local-first** - Data stored locally, sync is optional
+- ✅ **GDPR compliant** - Consent-based, 30-day retention
+- ✅ **Your data, your control** - Export or delete anytime
+
+### Opt Out
+bash
+export DO_NOT_TRACK=1
+
+### Manage Consent
+bash
+telemetry-kit consent status  # Check current status
+telemetry-kit consent deny    # Disable telemetry
+telemetry-kit consent grant   # Enable telemetry
+
+### Access Your Data
+bash
+telemetry-kit events export --format json > my-data.json
+
+### Delete Your Data
+bash
+telemetry-kit events clear
+
+For privacy inquiries: privacy@example.com
+```
+
+## Common Compliance Pitfalls
+
+### ❌ Pitfall 1: Pre-Checked Consent Boxes
+
+```rust
+// ❌ BAD: Default to "yes"
+Confirm::new()
+    .with_prompt("Enable telemetry?")
+    .default(true)  // ❌ Not GDPR compliant
+    .interact()?;
+
+// ✅ GOOD: Default to "no"
+Confirm::new()
+    .with_prompt("Enable telemetry?")
+    .default(false)  // ✅ GDPR compliant
+    .interact()?;
+```
+
+### ❌ Pitfall 2: Tracking Without Consent
+
+```rust
+// ❌ BAD: Track before consent
+telemetry.track_event("app_start", |e| e.success(true)).await?;
+let consent = prompt_for_consent()?;
+
+// ✅ GOOD: Get consent first
+let consent = prompt_for_consent()?;
+if consent {
+    telemetry.track_event("app_start", |e| e.success(true)).await?;
+}
+```
+
+### ❌ Pitfall 3: Indefinite Retention
+
+```rust
+// ❌ BAD: Keep forever
+.data_retention(0)  // ❌ Not GDPR compliant
+
+// ✅ GOOD: Limited retention
+.data_retention(30)  // ✅ GDPR compliant
+```
+
+### ❌ Pitfall 4: No Opt-Out Mechanism
+
+```rust
+// ❌ BAD: Ignore DO_NOT_TRACK
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .build()?;
+
+// ✅ GOOD: Check DO_NOT_TRACK
+if TelemetryKit::is_do_not_track_enabled() {
+    return Ok(());  // Exit early
+}
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .build()?;
+```
+
+## Compliance Testing
+
+Test your privacy implementation:
+
+```rust
+#[cfg(test)]
+mod privacy_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_respects_do_not_track() {
+        std::env::set_var("DO_NOT_TRACK", "1");
+        assert!(TelemetryKit::is_do_not_track_enabled());
+        std::env::remove_var("DO_NOT_TRACK");
+    }
+
+    #[tokio::test]
+    async fn test_consent_required() {
+        let telemetry = TelemetryKit::builder()
+            .service_name("test")?
+            .consent_required(true)
+            .build()?;
+
+        // Events should be ignored without consent
+        telemetry.track_event("test", |e| e.success(true)).await?;
+
+        let events = telemetry.export_events().await?;
+        assert_eq!(events.len(), 0); // No events tracked
+    }
+
+    #[tokio::test]
+    async fn test_data_sanitization() {
+        let path = "/Users/john/secret.txt";
+        let sanitized = PrivacyManager::sanitize_path(path);
+        assert!(!sanitized.contains("john"));
+    }
+}
+```
+
+## Resources
+
+- [GDPR Official Text](https://gdpr-info.eu/)
+- [CCPA Official Text](https://oag.ca.gov/privacy/ccpa)
+- [ICO GDPR Guide](https://ico.org.uk/for-organisations/guide-to-data-protection/guide-to-the-general-data-protection-regulation-gdpr/)
+- [EDPB Guidelines](https://edpb.europa.eu/our-work-tools/general-guidance/gdpr-guidelines-recommendations-best-practices_en)
+
+## Next Steps
+
+- [Privacy Controls](/docs/privacy) - Technical implementation guide
+- [Advanced Privacy](/docs/advanced-privacy) - Future privacy features
+- [Self-Hosting](/docs/self-hosting) - Deploy your own server
+
+---
+
+**Compliance Level:** This guide implements privacy-by-design principles and provides technical tools for GDPR/CCPA compliance. Consult legal counsel for complete compliance assessment.

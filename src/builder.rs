@@ -184,6 +184,90 @@ impl TelemetryBuilder {
         self
     }
 
+    /// Prompt for user consent interactively before building
+    ///
+    /// This will show an interactive consent dialog on the first run (when consent status is Unknown).
+    /// On subsequent runs, it will use the stored consent preference.
+    ///
+    /// This method is only available when both 'privacy' and 'cli' features are enabled.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use telemetry_kit::prelude::*;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<()> {
+    /// let telemetry = TelemetryKit::builder()
+    ///     .service_name("my-app")?
+    ///     .service_version("1.0.0")
+    ///     .prompt_for_consent()?  // Shows interactive prompt on first run
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(all(feature = "privacy", feature = "cli"))]
+    pub fn prompt_for_consent(mut self) -> Result<Self> {
+        use crate::privacy::PrivacyManager;
+
+        let service_name = self
+            .service_name
+            .as_ref()
+            .ok_or_else(|| TelemetryError::missing_field("service_name"))?
+            .clone();
+
+        let service_version = self
+            .service_version
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("unknown");
+
+        // Create a privacy manager with current config
+        let config = self.privacy_config.clone().unwrap_or_default();
+        let manager = PrivacyManager::new(config.clone(), &service_name)?;
+
+        // Prompt for consent
+        let _consent_granted = manager.prompt_for_consent(&service_name, service_version)?;
+
+        // Set consent_required to true to respect the user's choice
+        self.privacy_config = Some(PrivacyConfig {
+            consent_required: true,
+            ..config
+        });
+
+        Ok(self)
+    }
+
+    /// Prompt for user consent with minimal message
+    ///
+    /// Similar to `prompt_for_consent` but shows a shorter, one-line prompt.
+    ///
+    /// This method is only available when both 'privacy' and 'cli' features are enabled.
+    #[cfg(all(feature = "privacy", feature = "cli"))]
+    pub fn prompt_minimal(mut self) -> Result<Self> {
+        use crate::privacy::PrivacyManager;
+
+        let service_name = self
+            .service_name
+            .as_ref()
+            .ok_or_else(|| TelemetryError::missing_field("service_name"))?
+            .clone();
+
+        // Create a privacy manager with current config
+        let config = self.privacy_config.clone().unwrap_or_default();
+        let manager = PrivacyManager::new(config.clone(), &service_name)?;
+
+        // Prompt for consent
+        let _consent_granted = manager.prompt_minimal(&service_name)?;
+
+        // Set consent_required to true to respect the user's choice
+        self.privacy_config = Some(PrivacyConfig {
+            consent_required: true,
+            ..config
+        });
+
+        Ok(self)
+    }
+
     /// Build the TelemetryKit instance
     pub fn build(self) -> Result<TelemetryKit> {
         let service_name = self

@@ -1,6 +1,6 @@
 # telemetry-kit Roadmap
 
-**Last Updated:** 2025-01-23
+**Last Updated:** 2025-11-23
 **Status:** Active Development (v0.2.0-alpha.1)
 **Next Release:** v0.2.0 (Q1 2025)
 
@@ -8,6 +8,8 @@
 - ✅ Week 8: Security Hardening Complete (Jan 2025)
 - ✅ Node.js Bindings Proof-of-Concept (Jan 2025)
 - ✅ `#[instrument]` Procedural Macro (Jan 2025)
+- ✅ CLI Project Scaffolding (Jan 2025)
+- ✅ Smart Instrumentation Recommendations (Nov 2025)
 - 🚧 v0.3.0: Developer Experience (In Progress)
 
 **Quick Stats:**
@@ -43,11 +45,13 @@ telemetry-kit aims to be the **simplest, most privacy-respecting** way to add te
 - HMAC-SHA256 authentication
 
 **CLI Tool:**
+- Project scaffolding (`telemetry-kit new`)
 - Interactive setup (`telemetry-kit init`)
 - Configuration validation
 - Event statistics
 - Manual sync
 - Database cleanup
+- Privacy consent management
 
 **Infrastructure:**
 - Reference server implementation (Rust + PostgreSQL + Redis)
@@ -75,12 +79,29 @@ telemetry-kit aims to be the **simplest, most privacy-respecting** way to add te
 - [x] Examples (basic + sync)
 - [x] Comprehensive documentation
 
+**CLI Project Scaffolding (January 2025):**
+- [x] `telemetry-kit new` command for project creation
+- [x] Binary/CLI application template with telemetry pre-configured
+- [x] Library template with telemetry integration
+- [x] Web service template (Axum) with telemetry
+- [x] Optional sync configuration (`--with-sync` flag)
+- [x] Automatic git initialization
+- [x] README generation with privacy documentation
+- [x] Project types: bin, lib, web
+
+**Smart Instrumentation Recommendations (November 2025):**
+- [x] `telemetry-kit analyze` command for code analysis
+- [x] Pattern detection engine (main functions, async functions, HTTP handlers, DB operations)
+- [x] Priority-based recommendations (High/Medium/Low)
+- [x] Detailed mode with code snippets
+- [x] JSON output format for tooling integration
+- [x] Recursive directory scanning
+- [x] Smart filtering (skips already-instrumented code)
+
 ### 🚧 In Progress
 
 **Developer Experience (v0.3.0):**
-- Planning phase and prioritization
 - Quick start guide development
-- CLI scaffolding design
 
 ---
 
@@ -122,23 +143,44 @@ telemetry-kit aims to be the **simplest, most privacy-respecting** way to add te
   - Supports async and sync functions
   - Compile-time code generation
   - Comprehensive tests with trybuild
-- [ ] CLI scaffolding (`telemetry-kit init my-project`)
-- [ ] Configuration templates (CLI tool, web service, library)
-- [ ] VS Code extension for inline suggestions
-- [ ] Smart instrumentation recommendations
-- [ ] Interactive consent prompts
+- [x] CLI scaffolding (`telemetry-kit new my-project`) ✅ (completed Jan 2025)
+  - Create new projects with telemetry pre-configured
+  - Three project types: binary/CLI, library, web service
+  - Optional sync configuration with .env.example
+  - Auto-generated README with privacy documentation
+  - Git initialization included
+- [x] Smart instrumentation recommendations ✅ (completed Nov 2025)
+  - Code analysis for instrumentation opportunities
+  - Pattern detection (main, async functions, HTTP handlers, DB ops)
+  - Priority-based recommendations with code snippets
+  - JSON output for tooling integration
+- [x] Interactive consent prompts ✅ (completed Nov 2025)
+  - First-run consent dialog with detailed privacy information
+  - Minimal (one-liner) consent prompt option
+  - Builder API methods: `.prompt_for_consent()`, `.prompt_minimal()`
+  - Automatic consent status detection
+  - Privacy-first defaults (NO by default)
+  - Integration with existing CLI consent commands
+- [x] VS Code extension for inline suggestions ✅ (completed Nov 2025)
+  - Smart project analysis with CLI integration
+  - 17+ code snippets for common patterns
+  - Inline diagnostics with quick fixes
+  - Context-aware telemetry insertion
+  - Configurable auto-analysis on save
+  - Priority-based suggestions (High/Medium/Low)
+  - Rich documentation and examples
 - [x] Enhanced error messages ✅ (completed in Week 7)
 
 **Documentation:**
-- [ ] Quick start guide (5-minute integration) 🚧 (in progress)
-- [ ] Best practices for different project types
-- [ ] Privacy compliance guide
-- [ ] Self-hosting production guide
+- [x] Quick start guide (5-minute integration) ✅ (completed Nov 2025)
+- [x] Best practices for different project types ✅ (completed Nov 2025)
+- [x] Privacy compliance guide ✅ (completed Nov 2025)
+- [x] Self-hosting production guide in docs/ ✅ (completed Nov 2025)
 
 **Current Sprint:**
-- Planning and prioritization complete
-- Quick start guide in development
-- CLI scaffolding design phase
+- ✅ **v0.3.0 Developer Experience COMPLETE**
+- All DX features implemented and documented
+- Ready for v0.3.0 release
 
 ---
 
