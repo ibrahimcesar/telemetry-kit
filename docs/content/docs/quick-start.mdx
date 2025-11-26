@@ -26,7 +26,7 @@ Add telemetry-kit to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-telemetry-kit = { version = "0.2", features = ["privacy", "sync"] }
+telemetry-kit = { version = "0.3", features = ["privacy", "sync"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -183,10 +183,20 @@ let telemetry = TelemetryKit::builder()
     .build()?;
 ```
 
-See [Auto-Sync Guide](/docs/auto-sync) for details.
+See [Auto-Sync Guide](/auto-sync) for details.
 
 </Step>
 </Steps>
+
+<Callout type="warn">
+**To collect and analyze telemetry data from your users**, you need a backend server to receive events. You have two options:
+
+1. **Managed Service (Recommended)** - Use our hosted service at [telemetry-kit.dev](https://telemetry-kit.dev). Get started instantly with a dashboard, analytics, and zero infrastructure to maintain.
+
+2. **Self-Hosted** - Deploy your own telemetry server using our [production-ready server implementation](/self-hosting). Full control over your data, but requires infrastructure management.
+
+Without a server configured, events are stored locally on each user's machine in `~/.telemetry-kit/`.
+</Callout>
 
 ## What You Get
 
@@ -242,7 +252,7 @@ After completing this quick start, you have:
 
 ```toml
 [dependencies]
-telemetry-kit = { version = "0.2", features = ["privacy"] }
+telemetry-kit = { version = "0.3", features = ["privacy"] }
 ```
 
 ### Permission Denied
@@ -315,7 +325,7 @@ async fn run_app() -> Result<(), Box<dyn std::error::Error>> {
 - [Documentation](/docs) - Full documentation
 - [Examples](https://github.com/ibrahimcesar/telemetry-kit/tree/main/examples) - Example projects
 - [GitHub Issues](https://github.com/ibrahimcesar/telemetry-kit/issues) - Report bugs
-- [API Reference](/docs/api) - Complete API docs
+- [API Reference](/api) - Complete API docs
 
 ---
 

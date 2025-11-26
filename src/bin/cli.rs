@@ -11,16 +11,26 @@
 //! - `telemetry-kit validate` - Validate configuration
 //! - `telemetry-kit clean` - Clear local events
 //! - `telemetry-kit consent` - Manage privacy consent
+//!
+//! ## Telemetry
+//!
+//! This CLI uses telemetry-kit to track anonymous usage patterns.
+//! We only collect: command names, success/failure, and timing.
+//! No personal data is ever collected. Respects DO_NOT_TRACK.
+//!
+//! To opt out: `export DO_NOT_TRACK=1`
 
 use clap::{Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use dialoguer::{Confirm, Input, Password, Select};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::PathBuf;
+use std::time::Instant;
+use telemetry_kit::TelemetryKit;
 
 #[derive(Parser)]
 #[command(name = "telemetry-kit")]
-#[command(version, about = "Privacy-first telemetry toolkit for Rust applications", long_about = None)]
+#[command(version, about = "\x1b[1;33mPrivacy-first telemetry toolkit for Rust applications\x1b[0m", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -166,7 +176,21 @@ enum ConsentAction {
 
 #[tokio::main]
 async fn main() {
+    let start = Instant::now();
     let cli = Cli::parse();
+
+    // Get command name for telemetry
+    let command_name = get_command_name(&cli.command);
+
+    // Initialize telemetry for the CLI itself (respects DO_NOT_TRACK)
+    let telemetry = if !TelemetryKit::is_do_not_track_enabled() {
+        TelemetryKit::builder()
+            .service_name("telemetry-kit-cli")
+            .ok()
+            .and_then(|b| b.service_version(env!("CARGO_PKG_VERSION")).build().ok())
+    } else {
+        None
+    };
 
     let result = match cli.command {
         Commands::New {
@@ -194,6 +218,18 @@ async fn main() {
             format,
         } => cmd_analyze(path, detailed, format).await,
     };
+
+    let success = result.is_ok();
+    let duration_ms = start.elapsed().as_millis() as u64;
+
+    // Track command execution
+    if let Some(ref t) = telemetry {
+        let _ = t
+            .track_command(&command_name, |event| {
+                event.success(success).duration_ms(duration_ms)
+            })
+            .await;
+    }
 
     match result {
         Ok(_) => std::process::exit(0),
@@ -868,6 +904,22 @@ fn get_service_name(
             })
             .unwrap_or_else(|| "default".to_string())
     }))
+}
+
+/// Get command name for telemetry tracking
+fn get_command_name(command: &Commands) -> String {
+    match command {
+        Commands::New { .. } => "new".to_string(),
+        Commands::Init { .. } => "init".to_string(),
+        Commands::Test { .. } => "test".to_string(),
+        Commands::Stats { .. } => "stats".to_string(),
+        Commands::Sync { .. } => "sync".to_string(),
+        Commands::Validate { .. } => "validate".to_string(),
+        Commands::Clean { .. } => "clean".to_string(),
+        #[cfg(feature = "privacy")]
+        Commands::Consent { .. } => "consent".to_string(),
+        Commands::Analyze { .. } => "analyze".to_string(),
+    }
 }
 
 /// Manage privacy consent

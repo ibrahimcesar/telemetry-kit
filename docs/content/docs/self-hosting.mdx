@@ -83,16 +83,16 @@ All responses include the `X-Clacks-Overhead: GNU Terry Pratchett` header as a t
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Client Applications                             │
-│  (Your Rust apps with telemetry-kit SDK)       │
+│  Client Applications                            │
+│  (Your Rust apps with telemetry-kit SDK)        │
 └──────────────────┬──────────────────────────────┘
                    │ HTTPS + HMAC-SHA256
                    ▼
 ┌─────────────────────────────────────────────────┐
 │  Ingestion API (Axum)                           │
-│  - HMAC authentication                           │
-│  - Timestamp validation                          │
-│  - Batch processing                              │
+│  - HMAC authentication                          │
+│  - Timestamp validation                         │
+│  - Batch processing                             │
 └──────────────────┬──────────────────────────────┘
                    │
                    ▼
@@ -927,9 +927,9 @@ async fn get_aggregated_stats(
 
 ## See Also
 
-- [API Reference](/docs/api) - Complete API documentation
+- [API Reference](/api) - Complete API documentation
 - [Getting Started](/docs) - Client setup
-- [Auto-Sync](/docs/auto-sync) - Configure automatic sync
-- [Best Practices](/docs/best-practices) - Development patterns
-- [Privacy Compliance](/docs/privacy-compliance) - GDPR/CCPA guide
+- [Auto-Sync](/auto-sync) - Configure automatic sync
+- [Best Practices](/best-practices) - Development patterns
+- [Privacy Compliance](/privacy-compliance) - GDPR/CCPA guide
 - [GitHub](https://github.com/ibrahimcesar/telemetry-kit/tree/main/server) - Server source code

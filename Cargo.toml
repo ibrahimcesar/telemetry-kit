@@ -96,6 +96,11 @@ name = "telemetry-kit"
 path = "src/bin/cli.rs"
 required-features = ["cli"]
 
+[[bin]]
+name = "tk"
+path = "src/bin/cli.rs"
+required-features = ["cli"]
+
 [[bench]]
 name = "telemetry_benchmarks"
 harness = false
