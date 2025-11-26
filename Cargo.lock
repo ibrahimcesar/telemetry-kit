@@ -3194,7 +3194,7 @@ checksum = "591ef38edfb78ca4771ee32cf494cb8771944bee237a9b91fc9c1424ac4b777b"
 
 [[package]]
 name = "telemetry-kit"
-version = "0.2.0-alpha.1"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "clap",
