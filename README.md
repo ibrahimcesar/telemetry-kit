@@ -5,7 +5,7 @@
 _Privacy-first usage analytics for Rust open source projects - understand how your CLI tools and libraries are used in the wild_
 
 [![Crates.io](https://img.shields.io/crates/v/telemetry-kit.svg)](https://crates.io/crates/telemetry-kit)
-[![Documentation](https://docs.rs/telemetry-kit/badge.svg)](https://docs.rs/telemetry-kit)
+[![Documentation](https://img.shields.io/badge/docs-docs.telemetry--kit.dev-blue)](https://docs.telemetry-kit.dev)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 
 **telemetry-kit** helps open source maintainers understand how their tools are used in the wild. Add privacy-first telemetry in 3 lines of code. Self-host or use our managed service. Perfect for CLI tools, libraries, and Rust applications.
@@ -520,7 +520,7 @@ We welcome contributions! This is a **new project** and we're building it in the
 
 ### User Documentation
 - [Quick Start Guide](docs/quick-start.md) *(coming soon)*
-- [API Reference](https://docs.rs/telemetry-kit)
+- [API Reference](https://docs.telemetry-kit.dev/api)
 - [Privacy Guide](docs/privacy.md) *(coming soon)*
 - [CLI Best Practices](docs/cli-best-practices.md) *(coming soon)*
 - [Self-Hosting Guide](docs/self-hosting.md) *(coming soon)*
@@ -586,5 +586,5 @@ This project includes the `X-Clacks-Overhead: GNU Terry Pratchett` header in all
 
 **First Usable Release**: v0.1.0 (Target: Q1 2025)
 
-[⭐ Star us on GitHub](https://github.com/ibrahimcesar/telemetry-kit) | [📖 Read the Docs](https://docs.rs/telemetry-kit) | [💬 Discussions](https://github.com/ibrahimcesar/telemetry-kit/discussions)
+[⭐ Star us on GitHub](https://github.com/ibrahimcesar/telemetry-kit) | [📖 Read the Docs](https://docs.telemetry-kit.dev) | [💬 Discussions](https://github.com/ibrahimcesar/telemetry-kit/discussions)
 

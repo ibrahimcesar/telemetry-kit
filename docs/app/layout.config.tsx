@@ -21,6 +21,11 @@ export const baseOptions: Omit<DocsLayoutProps, 'tree'> = {
       url: '/docs/api',
     },
     {
+      text: 'Main Site',
+      url: 'https://telemetry-kit.dev',
+      external: true,
+    },
+    {
       text: 'GitHub',
       url: 'https://github.com/ibrahimcesar/telemetry-kit',
       external: true,

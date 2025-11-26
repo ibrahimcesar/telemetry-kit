@@ -221,4 +221,4 @@ See [`examples/sync_example.rs`](examples/sync_example.rs) for a full working ex
 
 ## API Reference
 
-See the [full API documentation](https://docs.rs/telemetry-kit) for details on all configuration options and methods.
+See the [full API documentation](https://docs.telemetry-kit.dev/api) for details on all configuration options and methods.
