@@ -55,7 +55,7 @@ rand = "0.8"
 dirs = "5.0"
 
 # Procedural macros
-telemetry-kit-macros = { version = "0.2.0-alpha.1", path = "telemetry-kit-macros", optional = true }
+telemetry-kit-macros = { version = "0.3.0", path = "telemetry-kit-macros", optional = true }
 
 # Node.js bindings (optional)
 napi = { version = "2.16", features = ["async", "tokio_rt"], optional = true }

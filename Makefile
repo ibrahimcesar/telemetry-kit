@@ -326,14 +326,36 @@ tag: ## 🏷️  Create and push version tag
 
 ##@ Publishing
 
+# Get macros version
+MACROS_VERSION := $(shell grep '^version' telemetry-kit-macros/Cargo.toml | head -1 | cut -d '"' -f 2)
+
 .PHONY: publish-check
 publish-check: ## ✅ Check if ready to publish
 	@echo "$(CYAN)✅ Checking if ready to publish...$(RESET)"
 	@cargo publish --dry-run
 	@echo "$(GREEN)✅ Publish check passed$(RESET)"
 
+.PHONY: publish-macros-check
+publish-macros-check: ## ✅ Check if macros crate is ready to publish
+	@echo "$(CYAN)✅ Checking macros crate...$(RESET)"
+	@cargo publish -p telemetry-kit-macros --dry-run
+	@echo "$(GREEN)✅ Macros publish check passed$(RESET)"
+
+.PHONY: publish-macros
+publish-macros: ## 📦 Publish telemetry-kit-macros to crates.io
+	@echo "$(CYAN)📦 Publishing telemetry-kit-macros v$(MACROS_VERSION) to crates.io...$(RESET)"
+	@echo "$(YELLOW)⚠️  This will publish telemetry-kit-macros v$(MACROS_VERSION)$(RESET)"
+	@read -p "Continue? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		cargo publish -p telemetry-kit-macros; \
+		echo "$(GREEN)✅ telemetry-kit-macros published$(RESET)"; \
+	else \
+		echo "$(YELLOW)❌ Publish cancelled$(RESET)"; \
+	fi
+
 .PHONY: publish
-publish: ## 📦 Publish to crates.io
+publish: ## 📦 Publish telemetry-kit to crates.io
 	@echo "$(CYAN)📦 Publishing to crates.io...$(RESET)"
 	@echo "$(YELLOW)⚠️  This will publish version $(VERSION) to crates.io$(RESET)"
 	@read -p "Continue? [y/N] " -n 1 -r; \
@@ -344,6 +366,92 @@ publish: ## 📦 Publish to crates.io
 	else \
 		echo "$(YELLOW)❌ Publish cancelled$(RESET)"; \
 	fi
+
+.PHONY: publish-all
+publish-all: ## 🚀 Publish all crates in correct order (macros first, then main)
+	@echo "$(BOLD)$(CYAN)🚀 Publishing all crates to crates.io$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Step 1: Sync versions$(RESET)"
+	@echo "  Main crate:   v$(VERSION)"
+	@echo "  Macros crate: v$(MACROS_VERSION)"
+	@echo ""
+	@if [ "$(VERSION)" != "$(MACROS_VERSION)" ]; then \
+		echo "$(RED)❌ Version mismatch! Please ensure both crates have the same version.$(RESET)"; \
+		echo "$(YELLOW)   Update telemetry-kit-macros/Cargo.toml version to $(VERSION)$(RESET)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)✅ Versions match$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Step 2: Pre-publish checks$(RESET)"
+	@cargo publish -p telemetry-kit-macros --dry-run
+	@echo "$(GREEN)✅ Macros crate ready$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Step 3: Publish telemetry-kit-macros$(RESET)"
+	@echo "$(YELLOW)⚠️  About to publish telemetry-kit-macros v$(VERSION) to crates.io$(RESET)"
+	@read -p "Publish macros crate? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ ! $$REPLY =~ ^[Yy]$$ ]]; then \
+		echo "$(YELLOW)❌ Publish cancelled$(RESET)"; \
+		exit 1; \
+	fi
+	@cargo publish -p telemetry-kit-macros
+	@echo "$(GREEN)✅ telemetry-kit-macros v$(VERSION) published$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Step 4: Wait for crates.io to index (30 seconds)...$(RESET)"
+	@echo "$(YELLOW)⏳ Waiting for crates.io to index the macros crate...$(RESET)"
+	@sleep 30
+	@echo "$(GREEN)✅ Wait complete$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Step 5: Publish telemetry-kit$(RESET)"
+	@echo "$(YELLOW)⚠️  About to publish telemetry-kit v$(VERSION) to crates.io$(RESET)"
+	@read -p "Publish main crate? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ ! $$REPLY =~ ^[Yy]$$ ]]; then \
+		echo "$(YELLOW)❌ Publish cancelled$(RESET)"; \
+		exit 1; \
+	fi
+	@cargo publish
+	@echo ""
+	@echo "$(GREEN)$(BOLD)🎉 All crates published successfully!$(RESET)"
+	@echo ""
+	@echo "  📦 telemetry-kit-macros v$(VERSION)"
+	@echo "  📦 telemetry-kit v$(VERSION)"
+	@echo ""
+	@echo "$(CYAN)View on crates.io:$(RESET)"
+	@echo "  https://crates.io/crates/telemetry-kit-macros"
+	@echo "  https://crates.io/crates/telemetry-kit"
+	@echo ""
+
+.PHONY: publish-status
+publish-status: ## 📊 Show publish status and version info
+	@echo "$(BOLD)$(CYAN)📊 Publish Status$(RESET)"
+	@echo ""
+	@echo "$(BOLD)Local versions:$(RESET)"
+	@echo "  telemetry-kit:        v$(VERSION)"
+	@echo "  telemetry-kit-macros: v$(MACROS_VERSION)"
+	@echo ""
+	@if [ "$(VERSION)" = "$(MACROS_VERSION)" ]; then \
+		echo "$(GREEN)✅ Versions are in sync$(RESET)"; \
+	else \
+		echo "$(RED)❌ Version mismatch - sync before publishing$(RESET)"; \
+	fi
+	@echo ""
+	@echo "$(BOLD)Crates.io status:$(RESET)"
+	@echo "  Check: https://crates.io/crates/telemetry-kit"
+	@echo "  Check: https://crates.io/crates/telemetry-kit-macros"
+	@echo ""
+
+.PHONY: version-sync
+version-sync: ## 🔄 Sync macros version to match main crate version
+	@echo "$(CYAN)🔄 Syncing versions...$(RESET)"
+	@echo "  Main crate version: $(VERSION)"
+	@echo "  Updating telemetry-kit-macros to v$(VERSION)..."
+	@sed -i '' 's/^version = ".*"/version = "$(VERSION)"/' telemetry-kit-macros/Cargo.toml
+	@echo "$(GREEN)✅ Macros version updated to $(VERSION)$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)📝 Also update the dependency version in main Cargo.toml:$(RESET)"
+	@grep "telemetry-kit-macros" Cargo.toml
+	@echo ""
 
 ##@ Benchmarking
 
