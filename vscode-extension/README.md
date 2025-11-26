@@ -1,18 +1,21 @@
 # telemetry-kit VS Code Extension
 
-Intelligent telemetry suggestions and code snippets for Rust applications using [telemetry-kit](https://github.com/ibrahimcesar/telemetry-kit).
+Intelligent telemetry suggestions and code snippets for Rust open source projects using [telemetry-kit](https://github.com/ibrahimcesar/telemetry-kit).
+
+**Perfect for open source maintainers** who want to understand how their CLI tools, libraries, and applications are used in the wild - without compromising user privacy.
 
 ## Features
 
-### 🔍 Smart Analysis
+### 🔍 Smart Analysis for OSS Projects
 
-Automatically detects instrumentation opportunities in your Rust code:
+Automatically detects instrumentation opportunities in your Rust code to help you understand real-world usage:
 
-- **Main Functions** - Track application lifecycle
-- **Async Functions** - Monitor async operations
-- **HTTP Handlers** - Track web requests
-- **Database Operations** - Monitor query performance
-- **Error Paths** - Track failure scenarios
+- **Main Functions** - Track application lifecycle and startup
+- **CLI Commands** - Monitor which commands users actually use
+- **Async Functions** - Monitor async operations and performance
+- **HTTP Handlers** - Track API endpoint usage in web frameworks
+- **Error Paths** - Identify where users encounter issues
+- **Library Functions** - Track feature adoption in your crates
 
 ![Analysis Demo](images/analysis-demo.gif)
 

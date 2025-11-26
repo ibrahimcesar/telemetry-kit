@@ -1,14 +1,14 @@
 <div align="center">
-  
+
 ![Logo](./logo.svg)
 
-_Privacy-first usage analytics for library authors_
+_Privacy-first usage analytics for Rust open source projects - understand how your CLI tools and libraries are used in the wild_
 
 [![Crates.io](https://img.shields.io/crates/v/telemetry-kit.svg)](https://crates.io/crates/telemetry-kit)
 [![Documentation](https://docs.rs/telemetry-kit/badge.svg)](https://docs.rs/telemetry-kit)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 
-**telemetry-kit** makes adding OpenTelemetry to your Rust applications effortless. No more 50+ lines of boilerplate, no more wondering what to instrument, no more privacy concerns.
+**telemetry-kit** helps open source maintainers understand how their tools are used in the wild. Add privacy-first telemetry in 3 lines of code. Self-host or use our managed service. Perfect for CLI tools, libraries, and Rust applications.
 
 </div>
 
@@ -132,12 +132,19 @@ See [CLI.md](project-docs/CLI.md) for complete CLI documentation.
 
 ## 🎯 The Problem
 
-Current Rust telemetry solutions are:
+As an open source maintainer, you want to understand:
+- Which features are actually used vs ignored
+- Where users encounter errors or confusion
+- How your CLI tool performs in real-world environments
+- Whether your library is used correctly
+
+But current telemetry solutions are:
 - **Too complex**: Setting up OpenTelemetry requires understanding multiple crates and writing verbose boilerplate
-- **Not opinionated**: Developers don't know *what* to track or *where* to add instrumentation
-- **Privacy-blind**: Easy to accidentally log PII, no built-in anonymization
+- **Not opinionated**: You don't know *what* to track or *where* to add instrumentation
+- **Privacy-blind**: Easy to accidentally log PII, risking your users' trust
 - **CLI-unfriendly**: Most tools designed for long-running services, not CLI applications
 - **Hard to self-host**: Commercial solutions or complex infrastructure required
+- **Trust issues**: Users disable telemetry because they don't trust what's collected
 
 ## ✨ The Solution
 
@@ -157,15 +164,54 @@ async fn main() {
 }
 ```
 
-**What you get:**
+**What you get as an OSS maintainer:**
 - ✅ **3 lines instead of 50+**: Sensible defaults, zero boilerplate
 - 🎯 **Smart instrumentation**: Auto-detect CLI commands, errors, and performance bottlenecks
-- 🔒 **Privacy-first**: Built-in anonymization, GDPR-compliant, opt-in by default
+- 🔒 **Privacy-first**: Built-in anonymization, GDPR-compliant, earns user trust
 - 🚀 **CLI-optimized**: Works with short-lived processes, offline-capable
 - 📦 **Self-hostable**: Simple Docker-based collection server included
 - 🤖 **AI-suggested**: Get recommendations on what to instrument
+- 📊 **GitHub Badges**: Show usage metrics in your README
+- 👥 **Public Dashboards**: Share anonymous analytics with your community
 
 ## 🌟 Key Features
+
+### For Open Source Maintainers
+
+**Understand Your Users Without Compromising Their Privacy:**
+
+```rust
+// Add to your CLI tool or library
+let telemetry = TelemetryKit::builder()
+    .service_name("my-awesome-cli")?
+    .service_version(env!("CARGO_PKG_VERSION"))
+    .prompt_for_consent()?       // Ask users first
+    .build()?;
+
+// Track what matters
+telemetry.track_command("build", |event| {
+    event.success(true).duration_ms(1234)
+}).await?;
+```
+
+**What You Can Learn:**
+- 📊 **Feature Usage**: Which commands/features are popular vs unused
+- ⚠️ **Error Patterns**: Where users struggle or encounter bugs
+- ⚡ **Performance**: Real-world execution times and bottlenecks
+- 🌍 **Platform Distribution**: OS/architecture breakdown
+- 📈 **Adoption Trends**: New vs returning users, version migration
+
+**Build Trust With Your Community:**
+- 🔒 **Transparent**: Users see exactly what you collect
+- 🛑 **Respectful**: DO_NOT_TRACK honored automatically
+- ✅ **Consent-First**: Optional interactive prompts
+- 📖 **Open Source**: Inspect the code, self-host if preferred
+- 🎯 **Anonymous**: No PII, just anonymous usage patterns
+
+**Showcase Your Impact:**
+- 🏆 Add usage badges to your README: ![Downloads](https://img.shields.io/badge/active_users-1.2K%2Fmo-blue)
+- 📊 Share public dashboards with your community
+- 📈 Show growth and adoption metrics to sponsors
 
 ### Zero-Config Telemetry
 ```rust

@@ -184,29 +184,7 @@ telemetry-kit aims to be the **simplest, most privacy-respecting** way to add te
 
 ---
 
-### v0.4.0 - Advanced Analytics
-
-**Target Date:** August 2025
-
-**Focus:** Insights and intelligence
-
-**Features:**
-- [ ] User cohorts (anonymous grouping)
-- [ ] Trend detection
-- [ ] Usage pattern analysis
-- [ ] Performance regression detection
-- [ ] Custom metric definitions
-- [ ] Retention analysis
-- [ ] Feature adoption tracking
-
-**Privacy:**
-- [ ] Differential privacy for aggregations
-- [ ] Zero-knowledge analytics
-- [ ] Encrypted user segments
-
----
-
-### v0.6.0 - Node.js Ecosystem
+### v0.4.0 - Node.js Ecosystem
 
 **Target Date:** September 2025
 

@@ -1,7 +1,7 @@
 {
   "name": "telemetry-kit",
   "displayName": "telemetry-kit",
-  "description": "Intelligent telemetry suggestions and snippets for Rust applications using telemetry-kit",
+  "description": "Privacy-first telemetry for Rust OSS projects - understand how your CLI tools and libraries are used",
   "version": "0.1.0",
   "publisher": "telemetry-kit",
   "icon": "icon.png",
@@ -20,9 +20,14 @@
   "keywords": [
     "rust",
     "telemetry",
-    "observability",
+    "analytics",
+    "open-source",
+    "cli",
+    "privacy",
     "monitoring",
-    "analytics"
+    "usage-analytics",
+    "library",
+    "maintainers"
   ],
   "activationEvents": [
     "onLanguage:rust",
