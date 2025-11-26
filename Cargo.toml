@@ -1,6 +1,6 @@
 [package]
 name = "telemetry-kit"
-version = "0.2.0-alpha.1"
+version = "0.3.0"
 edition = "2021"
 authors = ["Ibrahim Cesar <email@ibrahimcesar.com>"]
 license = "MIT OR Apache-2.0"
@@ -10,7 +10,11 @@ homepage = "https://github.com/ibrahimcesar/telemetry-kit"
 documentation = "https://docs.telemetry-kit.dev"
 readme = "README.md"
 keywords = ["telemetry", "opentelemetry", "observability", "tracing", "metrics"]
-categories = ["development-tools", "development-tools::profiling", "network-programming"]
+categories = [
+    "development-tools",
+    "development-tools::profiling",
+    "network-programming",
+]
 rust-version = "1.75.0"
 
 [dependencies]
@@ -22,9 +26,9 @@ serde_json = "1.0"
 reqwest = { version = "0.11", features = ["json"] }
 
 # Cryptography
+hex = "0.4"
 hmac = "0.12"
 sha2 = "0.10"
-hex = "0.4"
 
 # UUID generation
 uuid = { version = "1.6", features = ["v4", "serde"] }
@@ -58,26 +62,30 @@ napi = { version = "2.16", features = ["async", "tokio_rt"], optional = true }
 napi-derive = { version = "2.16", optional = true }
 
 # CLI dependencies (optional)
-clap = { version = "4.4", features = ["derive", "color", "suggestions"], optional = true }
+colored = { version = "2.1", optional = true }
+clap = { version = "4.4", features = [
+    "derive",
+    "color",
+    "suggestions",
+], optional = true }
 dialoguer = { version = "0.11", optional = true }
 indicatif = { version = "0.17", optional = true }
-colored = { version = "2.1", optional = true }
+
 
 [dev-dependencies]
+criterion = { version = "0.5", features = ["async_tokio"] }
+proptest = "1.4"
 tokio-test = "0.4"
 wiremock = "0.6"
-proptest = "1.4"
-criterion = { version = "0.5", features = ["async_tokio"] }
+
 
 [features]
-default = ["sync", "privacy"]
-sync = ["tokio"]
 cli = ["clap", "dialoguer", "indicatif", "colored", "tokio"]
-privacy = []
-napi-bindings = ["napi", "napi-derive", "tokio"]
+default = ["sync", "privacy"]
 macros = ["telemetry-kit-macros"]
-# Future features:
-# simple-server = []
+napi-bindings = ["napi", "napi-derive", "tokio"]
+privacy = []
+sync = ["tokio"]
 
 [lib]
 name = "telemetry_kit"
@@ -93,10 +101,4 @@ name = "telemetry_benchmarks"
 harness = false
 
 [workspace]
-members = [
-    ".",
-    "server", "telemetry-kit-macros",
-    # Future workspace members:
-    # "telemetry-kit-cli",
-    # "telemetry-kit-macros",
-]
+members = [".", "server", "telemetry-kit-macros"]

@@ -4,21 +4,17 @@ import Image from 'next/image';
 export const baseOptions: Omit<DocsLayoutProps, 'tree'> = {
   nav: {
     title: (
-      <div className="flex items-center gap-2">
-        <Image src="/logo.svg" alt="telemetry-kit" width={24} height={24} />
-        <span className="font-semibold">telemetry-kit</span>
-      </div>
+      <Image src="/logo.svg" alt="telemetry-kit" width={140} height={32} />
     ),
   },
   links: [
     {
-      text: 'Documentation',
-      url: '/docs',
-      active: 'nested-url',
+      text: 'Quick Start',
+      url: '/quick-start',
     },
     {
       text: 'API Reference',
-      url: '/docs/api',
+      url: '/api',
     },
     {
       text: 'Main Site',
