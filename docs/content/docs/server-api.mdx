@@ -1,0 +1,422 @@
+---
+title: Server API Implementation
+description: HTTP API server implementation for telemetry-kit.dev ingestion service
+icon: Server
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+The telemetry-kit server is a complete HTTP API implementation using the Axum framework. It connects all core components (Event Schema validation, DO_NOT_TRACK middleware, SYNC_PROTOCOL specification) into a functional, production-ready service.
+
+<Callout type="info">
+This documentation covers the server implementation details. For self-hosting instructions, see the [Self-Hosting Guide](/self-hosting).
+</Callout>
+
+---
+
+## Architecture
+
+### Hexagonal Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   HTTP Layer (Axum)                 │
+│  - Request routing                                  │
+│  - Middleware (HMAC, DNT, CORS, Tracing)           │
+│  - Error handling                                   │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│                 Handlers (API Crate)                │
+│  - Ingestion handler                                │
+│  - Health check handler                             │
+│  - Request validation                               │
+│  - Response formatting                              │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────┐
+│            Domain Layer (Event Schema)              │
+│  - EventEnvelope validation                         │
+│  - Schema version checks                            │
+│  - Business rules (user_id format, timestamps)      │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## API Endpoints
+
+### Health Check
+
+```
+GET /health
+```
+
+Returns server health status for monitoring and load balancers.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "version": "0.0.1",
+  "timestamp": "2025-11-19T10:30:00Z"
+}
+```
+
+**Use Cases:**
+- Kubernetes liveness probes
+- Load balancer health checks
+- Monitoring systems
+- Deployment verification
+
+---
+
+### Event Ingestion
+
+```
+POST /v1/ingest/{org_id}/{app_id}
+```
+
+Receives batches of telemetry events from SDK clients.
+
+**Required Headers:**
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `Content-Type` | Must be `application/json` | `application/json` |
+| `X-Signature` | HMAC-SHA256 signature | `a1b2c3d4...` |
+| `X-Timestamp` | Unix timestamp | `1700000000` |
+| `X-Nonce` | UUID v4 for replay prevention | `550e8400-e29b-41d4-a716-446655440000` |
+| `X-Batch-Size` | Number of events in batch | `10` |
+| `X-SDK-Version` | SDK identifier | `telemetry-kit-rust/0.3.0` |
+| `X-Schema-Version` | Event schema version | `1.0.0` |
+
+**Request Body:**
+```json
+{
+  "events": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "schema_version": "1.0.0",
+      "timestamp": "2025-11-19T10:30:00Z",
+      "user_id": "anon_a1b2c3d4e5f6...",
+      "service": {
+        "name": "my-app",
+        "version": "1.0.0"
+      },
+      "event": {
+        "type": "command",
+        "data": { ... }
+      }
+    }
+  ]
+}
+```
+
+---
+
+## Response Formats
+
+### Success (200 OK)
+
+All events accepted:
+
+```json
+{
+  "accepted": 10,
+  "rejected": 0,
+  "errors": []
+}
+```
+
+### Partial Success (207 Multi-Status)
+
+Some events rejected:
+
+```json
+{
+  "accepted": 8,
+  "rejected": 2,
+  "errors": [
+    {
+      "index": 0,
+      "event_id": "550e8400-e29b-41d4-a716-446655440000",
+      "error": "Unsupported schema version: 2.0.0"
+    },
+    {
+      "index": 5,
+      "event_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "error": "user_id must start with 'anon_' prefix"
+    }
+  ]
+}
+```
+
+### Error Response Format
+
+All errors follow a consistent format:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "user_id must start with 'anon_' prefix"
+  }
+}
+```
+
+---
+
+## Validation Rules
+
+### Batch Validation
+
+| Rule | Limit | Error |
+|------|-------|-------|
+| Max batch size | 1000 events | `413 Payload Too Large` |
+| Max payload size | 5 MB | `413 Payload Too Large` |
+
+### Event Validation
+
+| Field | Rule | Example |
+|-------|------|---------|
+| `schema_version` | Must be `1.0.0` | `"1.0.0"` |
+| `user_id` | Must start with `anon_` + 64 hex chars | `"anon_a1b2..."` |
+| `user_id` length | Exactly 69 characters | - |
+| `service.name` | Cannot be empty | `"my-app"` |
+| `event.type` | Cannot be empty | `"command"` |
+| `timestamp` | Within 7 days of current time | - |
+
+---
+
+## HMAC Authentication
+
+### Signature Calculation
+
+```
+signature = HMAC-SHA256(secret, "{timestamp}:{nonce}:{body}")
+```
+
+**Example (Python):**
+```python
+import hmac
+import hashlib
+import time
+import uuid
+import json
+
+secret = "your-hmac-secret"
+timestamp = str(int(time.time()))
+nonce = str(uuid.uuid4())
+body = json.dumps({"events": [...]})
+
+message = f"{timestamp}:{nonce}:{body}"
+signature = hmac.new(
+    secret.encode(),
+    message.encode(),
+    hashlib.sha256
+).hexdigest()
+```
+
+### Security Features
+
+- **HMAC-SHA256** - Cryptographically secure request signing
+- **Timestamp validation** - ±5 minutes tolerance prevents replay attacks
+- **Nonce validation** - UUID v4 format for uniqueness
+- **Constant-time comparison** - Prevents timing attacks
+
+---
+
+## Middleware Stack
+
+The server applies middleware in this order:
+
+1. **CORS** - Cross-Origin Resource Sharing (configurable)
+2. **Request Tracing** - Logging and observability
+3. **DO_NOT_TRACK** - RFC 7842 compliant (for ingestion routes)
+4. **HMAC Validation** - Request signing (for ingestion routes)
+
+---
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Server
+APP_SERVER__HOST=0.0.0.0
+APP_SERVER__PORT=8080
+
+# Ingestion limits
+APP_INGESTION__MAX_BATCH_SIZE=1000
+APP_INGESTION__MAX_PAYLOAD_SIZE=5242880
+
+# Security
+APP_SECURITY__TIMESTAMP_TOLERANCE=300
+APP_SECURITY__NONCE_TTL=600
+
+# Observability
+APP_OBSERVABILITY__LOG_LEVEL=info
+APP_OBSERVABILITY__LOG_FORMAT=json
+```
+
+### Configuration Files
+
+The server loads configuration in priority order:
+
+1. `config/default.toml` - Base configuration
+2. `config/{environment}.toml` - Environment-specific
+3. Environment variables with `APP_` prefix
+
+### Defaults
+
+| Setting | Default |
+|---------|---------|
+| Host | `0.0.0.0` |
+| Port | `8080` |
+| Max batch size | `1000 events` |
+| Max payload size | `5 MB` |
+| Timestamp tolerance | `±5 minutes` |
+| Nonce TTL | `10 minutes` |
+
+---
+
+## Error Types
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `bad_request` | 400 | Malformed request |
+| `unauthorized` | 401 | Missing or invalid authentication |
+| `not_found` | 404 | Endpoint not found |
+| `validation_error` | 422 | Event validation failed |
+| `rate_limit_exceeded` | 429 | Too many requests |
+| `payload_too_large` | 413 | Batch exceeds limits |
+| `internal_error` | 500 | Server error |
+| `service_unavailable` | 503 | Service temporarily unavailable |
+
+---
+
+## Running the Server
+
+### Development
+
+```bash
+# Set environment
+export DATABASE_URL=postgres://user:pass@localhost/telemetry
+export REDIS_URL=redis://localhost:6379
+export APP_OBSERVABILITY__LOG_LEVEL=debug
+export APP_OBSERVABILITY__LOG_FORMAT=pretty
+
+# Run server
+cargo run --package api
+
+# Output:
+# INFO telemetry_kit_api: Starting telemetry-kit API server host=0.0.0.0 port=8080
+# INFO telemetry_kit_api: Server listening on http://0.0.0.0:8080
+# INFO telemetry_kit_api: Health check: http://0.0.0.0:8080/health
+```
+
+### Production
+
+```bash
+# Build optimized binary
+cargo build --release --package api
+
+# Run with production config
+APP_OBSERVABILITY__LOG_FORMAT=json ./target/release/api
+```
+
+---
+
+## Testing Endpoints
+
+### Health Check
+
+```bash
+curl http://localhost:8080/health
+```
+
+### Ingestion with HMAC
+
+```bash
+# Generate signature
+TIMESTAMP=$(date +%s)
+NONCE=$(uuidgen)
+BODY='{"events":[]}'
+SECRET="your-secret"
+
+SIGNATURE=$(echo -n "${TIMESTAMP}:${NONCE}:${BODY}" | \
+  openssl dgst -sha256 -hmac "${SECRET}" | cut -d' ' -f2)
+
+# Send request
+curl -X POST "http://localhost:8080/v1/ingest/${ORG_ID}/${APP_ID}" \
+  -H "Content-Type: application/json" \
+  -H "X-Signature: ${SIGNATURE}" \
+  -H "X-Timestamp: ${TIMESTAMP}" \
+  -H "X-Nonce: ${NONCE}" \
+  -H "X-Batch-Size: 0" \
+  -H "X-SDK-Version: curl/1.0" \
+  -H "X-Schema-Version: 1.0.0" \
+  -d "${BODY}"
+```
+
+---
+
+## Performance
+
+### Latency (Estimated)
+
+| Operation | Target |
+|-----------|--------|
+| Health check | < 1ms |
+| Ingestion (validation only) | < 10ms |
+| With storage | < 50ms p99 |
+
+### Throughput (Estimated)
+
+| Metric | Target |
+|--------|--------|
+| Requests/second | 1,000+ (single instance) |
+| Events/second | 10,000+ (with batching) |
+
+### Resources
+
+| Resource | Baseline |
+|----------|----------|
+| Memory | ~50MB |
+| CPU | Low (async I/O bound) |
+
+---
+
+## Security Considerations
+
+### Implemented
+
+- HMAC-SHA256 request signing
+- Timestamp validation (time window)
+- Nonce format validation
+- DO_NOT_TRACK support (RFC 7842)
+- Anonymous user IDs
+- Constant-time signature comparison
+- Error message sanitization
+
+### Recommended for Production
+
+- TLS/HTTPS termination (nginx, load balancer)
+- Rate limiting (per-token quotas)
+- Nonce deduplication cache (Redis)
+- Token rotation strategy
+- Network isolation
+
+---
+
+## See Also
+
+- [Self-Hosting Guide](/self-hosting) - Deploy your own server
+- [API Reference](/api) - SDK API documentation
+- [Auto-Sync](/auto-sync) - Configure client syncing
+- [Privacy Compliance](/privacy-compliance) - GDPR/CCPA guide

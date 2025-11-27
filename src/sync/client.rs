@@ -147,7 +147,7 @@ impl SyncClient {
                 let error_response: ErrorResponse = response.json().await?;
                 Err(TelemetryError::ServerError {
                     status: status.as_u16(),
-                    message: format!("{}: {}", error_response.error, error_response.message),
+                    message: format!("{}: {}", error_response.error.code, error_response.error.message),
                 })
             }
 

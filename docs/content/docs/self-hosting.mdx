@@ -202,6 +202,106 @@ docker compose exec postgres psql -U telemetry -d telemetry
 \i /docker-entrypoint-initdb.d/001_initial_schema.sql
 ```
 
+## Client Configuration
+
+Once your server is running, configure your Rust applications to sync telemetry:
+
+### Getting Credentials
+
+When using the **managed service** at [telemetry-kit.dev](https://telemetry-kit.dev), you'll receive:
+
+| Credential | Description | Example |
+|------------|-------------|---------|
+| **App ID** | Unique identifier for your application | `app_e963188b` |
+| **API Token** | Authentication token for API requests | `tk_8008db0dc4dd41eca94f58a08b4c95d5` |
+| **HMAC Secret** | Secret for signing requests | `kIRV9eC/2+Dvqc4E9ubP9Cjzd0LG2/Dg0OVEfknKBPQ=` |
+
+For **self-hosted** deployments, generate these in your database:
+
+```sql
+-- Create an organization
+INSERT INTO organizations (org_id, name, tier)
+VALUES ('org_your_org', 'Your Organization', 'self-hosted');
+
+-- Create an application with credentials
+INSERT INTO applications (app_id, org_id, name, hmac_secret)
+VALUES (
+    'app_' || substr(md5(random()::text), 0, 9),
+    'org_your_org',
+    'My App',
+    encode(gen_random_bytes(32), 'base64')
+);
+
+-- Get your credentials
+SELECT app_id, hmac_secret FROM applications WHERE name = 'My App';
+```
+
+### Configuring the SDK
+
+```rust
+use telemetry_kit::prelude::*;
+
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .service_version(env!("CARGO_PKG_VERSION"))
+    .with_sync_credentials(
+        "app_e963188b",                              // App ID
+        "my-app",                                     // Service name
+        "tk_8008db0dc4dd41eca94f58a08b4c95d5",       // API Token
+        "kIRV9eC/2+Dvqc4E9ubP9Cjzd0LG2/Dg0OVEfknKBPQ=", // HMAC Secret
+    )?
+    .auto_sync(true)  // Enable automatic syncing
+    .build()?;
+```
+
+<Callout type="warn">
+**Never hardcode credentials in source code for production!** Use environment variables:
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .with_sync_credentials(
+        &std::env::var("TK_APP_ID").unwrap_or_default(),
+        "my-app",
+        &std::env::var("TK_TOKEN").unwrap_or_default(),
+        &std::env::var("TK_SECRET").unwrap_or_default(),
+    )?
+    .auto_sync(true)
+    .build()?;
+```
+</Callout>
+
+### Custom Server Endpoint
+
+For self-hosted deployments, specify your server URL:
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .endpoint("https://telemetry.yourcompany.com")?  // Your self-hosted server
+    .with_sync_credentials(app_id, service, token, secret)?
+    .auto_sync(true)
+    .build()?;
+```
+
+### Sync Behavior
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `auto_sync(true)` | Enables automatic background syncing | `false` |
+| `sync_interval(seconds)` | Time between sync attempts | `300` (5 min) |
+| `sync_on_shutdown(true)` | Flush events on graceful shutdown | `true` |
+
+```rust
+let telemetry = TelemetryKit::builder()
+    .service_name("my-app")?
+    .with_sync_credentials(app_id, service, token, secret)?
+    .auto_sync(true)
+    .sync_interval(60)        // Sync every minute
+    .sync_on_shutdown(true)   // Flush on exit
+    .build()?;
+```
+
 ## Security
 
 ### HMAC Authentication

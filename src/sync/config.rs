@@ -4,10 +4,10 @@ use crate::error::{Result, TelemetryError};
 use uuid::Uuid;
 
 /// Default sync endpoint
-pub const DEFAULT_ENDPOINT: &str = "https://telemetry-kit.dev";
+pub const DEFAULT_ENDPOINT: &str = "https://api.telemetry-kit.dev";
 
 /// Staging endpoint for testing
-pub const STAGING_ENDPOINT: &str = "https://staging.telemetry-kit.dev";
+pub const STAGING_ENDPOINT: &str = "https://api-staging.telemetry-kit.dev";
 
 /// Maximum batch size (per protocol spec)
 pub const MAX_BATCH_SIZE: usize = 1000;
@@ -21,11 +21,11 @@ pub struct SyncConfig {
     /// API endpoint base URL
     pub endpoint: String,
 
-    /// Organization ID
-    pub org_id: Uuid,
+    /// Organization ID (can be UUID or custom format like "app_xxx")
+    pub org_id: String,
 
-    /// Application ID
-    pub app_id: Uuid,
+    /// Application ID (can be UUID or custom format)
+    pub app_id: String,
 
     /// API token
     pub token: String,
@@ -94,8 +94,8 @@ impl SyncConfig {
 #[derive(Debug, Default)]
 pub struct SyncConfigBuilder {
     endpoint: Option<String>,
-    org_id: Option<Uuid>,
-    app_id: Option<Uuid>,
+    org_id: Option<String>,
+    app_id: Option<String>,
     token: Option<String>,
     secret: Option<String>,
     batch_size: Option<usize>,
@@ -122,33 +122,41 @@ impl SyncConfigBuilder {
         self
     }
 
-    /// Set organization ID
+    /// Set organization ID (accepts any string format)
     pub fn org_id(mut self, org_id: impl Into<String>) -> Result<Self> {
         let org_id_str = org_id.into();
-        let uuid = Uuid::parse_str(&org_id_str)
-            .map_err(|_| TelemetryError::invalid_uuid("org_id", &org_id_str))?;
-        self.org_id = Some(uuid);
+        if org_id_str.is_empty() {
+            return Err(TelemetryError::invalid_config(
+                "org_id",
+                "Organization ID cannot be empty",
+            ));
+        }
+        self.org_id = Some(org_id_str);
         Ok(self)
     }
 
     /// Set organization ID from UUID
     pub fn org_id_uuid(mut self, org_id: Uuid) -> Self {
-        self.org_id = Some(org_id);
+        self.org_id = Some(org_id.to_string());
         self
     }
 
-    /// Set application ID
+    /// Set application ID (accepts any string format)
     pub fn app_id(mut self, app_id: impl Into<String>) -> Result<Self> {
         let app_id_str = app_id.into();
-        let uuid = Uuid::parse_str(&app_id_str)
-            .map_err(|_| TelemetryError::invalid_uuid("app_id", &app_id_str))?;
-        self.app_id = Some(uuid);
+        if app_id_str.is_empty() {
+            return Err(TelemetryError::invalid_config(
+                "app_id",
+                "Application ID cannot be empty",
+            ));
+        }
+        self.app_id = Some(app_id_str);
         Ok(self)
     }
 
     /// Set application ID from UUID
     pub fn app_id_uuid(mut self, app_id: Uuid) -> Self {
-        self.app_id = Some(app_id);
+        self.app_id = Some(app_id.to_string());
         self
     }
 
@@ -299,5 +307,26 @@ mod tests {
             .build();
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_non_uuid_format_ids() {
+        // Support for custom ID formats like "app_xxx" from managed service
+        let config = SyncConfig::builder()
+            .org_id("app_e963188b")
+            .unwrap()
+            .app_id("telemetry-kit-cli")
+            .unwrap()
+            .token("tk_8008db0dc4dd41eca94f58a08b4c95d5")
+            .secret("kIRV9eC/2+Dvqc4E9ubP9Cjzd0LG2/Dg0OVEfknKBPQ=")
+            .build()
+            .unwrap();
+
+        assert_eq!(config.org_id, "app_e963188b");
+        assert_eq!(config.app_id, "telemetry-kit-cli");
+
+        let url = config.ingestion_url();
+        assert!(url.contains("app_e963188b"));
+        assert!(url.contains("telemetry-kit-cli"));
     }
 }

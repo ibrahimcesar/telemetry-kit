@@ -1,0 +1,288 @@
+---
+title: Staging & Production Environments
+description: Understand how to test your telemetry integration safely before going live
+icon: Layers
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+## Application Environments
+
+Every app in Telemetry Kit starts in **Staging** mode, giving you a safe sandbox to test your integration before going live. When you're ready, promote your app to **Production** with a single click.
+
+<Callout type="info">
+**Why Staging First?**
+Testing telemetry in staging ensures your events are correctly formatted, your privacy settings work as expected, and you're not accidentally polluting production data with test events.
+</Callout>
+
+## Environment Comparison
+
+| Feature | Staging | Production |
+|---------|---------|------------|
+| Events per month | 1,000 | Based on your tier |
+| Data retention | 30 days | Based on your tier |
+| API keys | Unique per app | Same as staging |
+| HMAC secret | Unique per app | Same as staging |
+| Ingest endpoint | Same URL | Same URL |
+| Dashboard analytics | Limited | Full analytics |
+| Promotion | One-click to production | N/A (permanent) |
+
+## How It Works
+
+<Steps>
+<Step>
+
+### Create Your App
+
+When you register a new app in the [Telemetry Kit Dashboard](https://telemetry-kit.dev/dashboard), it automatically starts in **Staging** mode.
+
+```rust
+// Your credentials work immediately
+let telemetry = TelemetryKit::builder()
+    .org_id("your-org-id")
+    .app_id("your-app-id")
+    .api_key("your-api-key")
+    .hmac_secret("your-hmac-secret")
+    .endpoint("https://api.telemetry-kit.dev")
+    .build()?;
+```
+
+</Step>
+
+<Step>
+
+### Test in Staging
+
+Use your staging environment to:
+
+- Verify event formats are correct
+- Test privacy controls (DNT, consent)
+- Debug authentication (HMAC signatures)
+- Experiment with different event types
+
+```rust
+// Send test events
+telemetry.track_event("test_event", |event| {
+    event
+        .property("environment", "staging")
+        .property("test", true)
+        .success(true)
+}).await?;
+```
+
+<Callout type="warn">
+**Staging Limits:** You can send up to 1,000 events per month in staging. This is intentionally limited to encourage testing, not production use.
+</Callout>
+
+</Step>
+
+<Step>
+
+### Promote to Production
+
+When you're ready to go live:
+
+1. Go to your [Dashboard](https://telemetry-kit.dev/dashboard)
+2. Select your app
+3. Click **"Promote to Production"**
+4. Confirm the permanent action
+
+</Step>
+
+<Step>
+
+### No Code Changes Required
+
+After promotion, your existing code works exactly the same:
+
+- Same API keys
+- Same HMAC secret
+- Same ingest endpoint URL
+- Same SDK configuration
+
+The only thing that changes is your limits and data retention - both now match your subscription tier.
+
+</Step>
+</Steps>
+
+## Staging vs Production Indicator
+
+Your dashboard shows which environment each app is in:
+
+- **Staging** - Yellow badge with test tube icon
+- **Production** - Green badge with rocket icon
+
+When viewing an app in staging, you'll also see:
+
+- Current event usage (e.g., "847 / 1,000")
+- Usage progress bar (turns yellow at 70%, red at 90%)
+- "Promote to Production" button
+
+## What Happens on Promotion
+
+When you promote an app to production:
+
+1. **Environment changes** from staging to production
+2. **All staging events are deleted** - you start fresh
+3. **Limits increase** to match your subscription tier
+4. **Data retention extends** based on your plan
+5. **Full analytics unlock** in your dashboard
+
+<Callout type="error">
+**Promotion is Permanent**
+You cannot demote an app back to staging. This is intentional - production apps contain real user data that shouldn't be mixed with test data.
+</Callout>
+
+## Staging Limits & Retention
+
+### Event Limits
+
+- **1,000 events per month** (resets on the 1st)
+- Events beyond the limit are rejected with HTTP 429
+- Usage counter visible in your dashboard
+
+### Data Retention
+
+- **30 days** for all staging events
+- Events older than 30 days are automatically deleted
+- This cleanup runs daily
+
+### What Counts as an Event?
+
+Each item in your `events` array counts as one event:
+
+```json
+{
+  "events": [
+    { "event": { "type": "command_executed" } },  // 1 event
+    { "event": { "type": "error_occurred" } }      // 2 events total
+  ]
+}
+```
+
+## Best Practices
+
+### 1. Test All Event Types
+
+Before promoting, send examples of every event type your app will generate:
+
+```rust
+// Test command tracking
+telemetry.track_command("build", |e| e.success(true)).await?;
+
+// Test error tracking
+telemetry.track_error(&some_error, |e| e.context("test", "staging")).await?;
+
+// Test custom events
+telemetry.track_event("feature_used", |e| e.property("feature", "export")).await?;
+```
+
+### 2. Verify Privacy Controls
+
+Test that DNT (Do Not Track) is respected:
+
+```bash
+# Test with DNT enabled
+DO_NOT_TRACK=1 cargo run
+
+# Verify no events were sent
+```
+
+### 3. Check HMAC Signatures
+
+Ensure your signature calculation is correct by monitoring for 401 errors:
+
+```rust
+// If you see 401 Unauthorized, check:
+// 1. HMAC secret is correct
+// 2. Timestamp is within 5 minutes
+// 3. Signature format is correct
+```
+
+### 4. Monitor Usage
+
+Keep an eye on your staging usage in the dashboard. If you're hitting limits during testing, you may need to:
+
+- Batch events more efficiently
+- Remove debug events
+- Use feature flags to disable telemetry in dev
+
+### 5. Clean Promote
+
+Once satisfied with testing:
+
+1. Review your event data in the dashboard
+2. Confirm events look correct
+3. Click "Promote to Production"
+4. Deploy your app to users
+
+## FAQ
+
+### Can I have multiple staging apps?
+
+Yes! Each app is independent. You can have some apps in staging and others in production.
+
+### Do staging and production share data?
+
+No. When you promote, all staging data is deleted. Production starts with zero events.
+
+### What if I hit the staging limit?
+
+You'll receive HTTP 429 (Too Many Requests) responses. Either wait for the monthly reset or promote to production.
+
+### Can I reset my staging data?
+
+Currently, you can only reset by promoting to production (which deletes all data). A manual reset feature may be added in the future.
+
+### Do I need different credentials for production?
+
+No! Your API keys, HMAC secret, and ingest URL stay exactly the same. This makes deployment simple - just promote in the dashboard.
+
+## API Response for Environment
+
+When querying your apps, the API includes environment information:
+
+```json
+{
+  "apps": [
+    {
+      "id": "app-uuid",
+      "name": "My App",
+      "environment": "staging",
+      "promoted_at": null
+    },
+    {
+      "id": "another-app",
+      "name": "Production App",
+      "environment": "production",
+      "promoted_at": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+## Staging Usage API
+
+Check your staging usage programmatically:
+
+```bash
+GET /api/v1/apps/{app_id}/staging-usage
+Authorization: Bearer {token}
+```
+
+Response:
+
+```json
+{
+  "events_this_month": 847,
+  "events_limit": 1000,
+  "events_remaining": 153
+}
+```
+
+## Related
+
+- [Quick Start Guide](/docs/quick-start) - Get started with Telemetry Kit
+- [Self-Hosting](/docs/self-hosting) - Deploy your own telemetry server
+- [Server API](/docs/server-api) - Complete API reference

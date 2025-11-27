@@ -183,11 +183,21 @@ async fn main() {
     let command_name = get_command_name(&cli.command);
 
     // Initialize telemetry for the CLI itself (respects DO_NOT_TRACK)
+    // Dogfooding: telemetry-kit tracks its own usage via telemetry-kit.dev
     let telemetry = if !TelemetryKit::is_do_not_track_enabled() {
         TelemetryKit::builder()
             .service_name("telemetry-kit-cli")
+            .and_then(|b| {
+                b.service_version(env!("CARGO_PKG_VERSION"))
+                    .with_sync_credentials(
+                        "bd90ea34-0b0a-4801-8eb1-76e51b1fe22a",  // org_id
+                        "bd90ea34-0b0a-4801-8eb1-76e51b1fe22a",  // app_id
+                        "tk_eeba7a2dd2d840ff83e146304c2a9e4d",
+                        "AR+s0qak9x6LDQoH5MJ0kFaKvvImWo7C0So5kqH6CT0=",
+                    )
+            })
+            .and_then(|b| b.auto_sync(true).build())
             .ok()
-            .and_then(|b| b.service_version(env!("CARGO_PKG_VERSION")).build().ok())
     } else {
         None
     };
@@ -222,13 +232,16 @@ async fn main() {
     let success = result.is_ok();
     let duration_ms = start.elapsed().as_millis() as u64;
 
-    // Track command execution
-    if let Some(ref t) = telemetry {
+    // Track command execution and shutdown telemetry
+    if let Some(t) = telemetry {
         let _ = t
             .track_command(&command_name, |event| {
                 event.success(success).duration_ms(duration_ms)
             })
             .await;
+
+        // Shutdown triggers sync if auto_sync is enabled
+        let _ = t.shutdown().await;
     }
 
     match result {

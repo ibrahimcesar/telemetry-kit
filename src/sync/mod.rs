@@ -56,16 +56,23 @@ pub struct EventError {
 /// Error response from server
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ErrorResponse {
+    /// Nested error object
+    pub error: ErrorDetails,
+    /// Retry after (for 429 responses)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_after: Option<u64>,
+}
+
+/// Error details
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ErrorDetails {
     /// Error code
-    pub error: String,
+    pub code: String,
     /// Error message
     pub message: String,
     /// Additional details
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<String>,
-    /// Retry after (for 429 responses)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub retry_after: Option<u64>,
 }
 
 impl SyncResponse {
