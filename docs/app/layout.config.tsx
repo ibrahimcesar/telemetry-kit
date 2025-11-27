@@ -1,10 +1,15 @@
 import type { DocsLayoutProps } from 'fumadocs-ui/layout';
-import Image from 'next/image';
 
 export const baseOptions: Omit<DocsLayoutProps, 'tree'> = {
   nav: {
     title: (
-      <Image src="/logo.svg" alt="telemetry-kit" width={140} height={32} />
+      <img
+        src="/logo.svg"
+        alt="telemetry-kit"
+        width={140}
+        height={32}
+        className="dark:invert"
+      />
     ),
   },
   links: [
